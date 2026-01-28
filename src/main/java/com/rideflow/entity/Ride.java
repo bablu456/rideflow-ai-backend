@@ -47,4 +47,6 @@ public class Ride {
 
     private String otp;
 
+    private Double fare;
+
 }
