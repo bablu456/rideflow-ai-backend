@@ -28,5 +28,25 @@ public class RideController {
         return ResponseEntity.ok(riderService.getRideStatus(rideId));
     }
 
+    @PostMapping("/{rideId}/accept")
+    public ResponseEntity<RideDto> acceptRide(@PathVariable Long rideId){
+        return ResponseEntity.ok(riderService.acceptRide(rideId));
+    }
+
+    @PostMapping("/{rideId}/start")
+    public ResponseEntity<RideDto> startRide(@PathVariable Long rideId, @RequestParam String otp){
+        return ResponseEntity.ok(riderService.startRide(rideId,otp));
+    }
+
+    @PostMapping("/{rideId}/complete")
+    public ResponseEntity<RideDto> completeRide(@PathVariable Long rideId){
+        return ResponseEntity.ok(riderService.completeRide(rideId));
+    }
+
+    @PostMapping("/{rideId}/cancel")
+    public ResponseEntity<RideDto> cancelRide(@PathVariable Long rideId){
+        return ResponseEntity.ok(riderService.cancelRide(rideId));
+    }
+
 
 }
