@@ -8,4 +8,11 @@ public interface RiderService {
     RideDto requestRide(RideRequestDto rideRequestDto);
     RideDto getRideStatus(Long rideId);
 
+    RideDto acceptRide(Long rideId);
+    RideDto startRide(Long rideId, String otp);
+    RideDto completeRide(Long rideId);
+    RideDto cancelRide(Long rideId);
+
+
+
 }

@@ -8,6 +8,7 @@ public class RideRequestDto {
     private Long passengerId;
     private Double pickupLatitude;
     private Double pickupLongitude;
+    private Double dropLatitude;
     private Double dropLongitude;
     private String vehichleType;
 }
