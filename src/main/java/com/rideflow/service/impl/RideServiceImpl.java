@@ -14,6 +14,7 @@ import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.List;
 @Service
 @RequiredArgsConstructor
@@ -42,7 +43,7 @@ public class RideServiceImpl implements RiderService{
         ride.setDriver(matchedDriver);
         ride.setPickupLatitude(request.getPickupLatitude());
         ride.setPickupLongitude(request.getPickupLongitude());
-        ride.setDropLatitude(request.getDropLongitude());
+        ride.setDropLatitude(request.getDropLatitude());
         ride.setDropLongitude(request.getDropLongitude());
         ride.setStatus(RideStatus.REQUESTED);
         ride.setFare(calculateFare());
@@ -61,6 +62,59 @@ public class RideServiceImpl implements RiderService{
                 .orElseThrow(() -> new RuntimeException("Ride not found"));
 
         return mapToDto(ride);
+    }
+
+    @Override
+    @Transactional
+    public RideDto acceptRide(Long rideId){
+        Ride ride = rideRepository.findById(rideId)
+                .orElseThrow(() ->new RuntimeException("Ride not found"));
+        if(ride.getStatus() != RideStatus.REQUESTED){
+            throw new RuntimeException("Ride already Processed ");
+        }
+        ride.setStatus(RideStatus.CONFIRMED);
+        return mapToDto(rideRepository.save(ride));
+    }
+
+    @Override
+    @Transactional
+    public RideDto completeRide(Long rideId){
+        Ride ride = rideRepository.findById(rideId)
+                .orElseThrow(() -> new RuntimeException("Ride not found "));
+        ride.setStatus(RideStatus.COMPLETED);
+        ride.setEndTime(LocalDateTime.now());
+
+        Driver driver = ride.getDriver();
+        driver.setAvailable(true);
+        driverRepository.save(driver);
+
+        return mapToDto(rideRepository.save(ride));
+    }
+
+    @Override
+    @Transactional
+    public RideDto startRide(Long rideId, String otp){
+        Ride ride = rideRepository.findById(rideId).orElseThrow(() -> new RuntimeException("Ride not found"));
+
+        if(!ride.getOtp().equals(otp)){
+            throw new RuntimeException("Invalid Otp ");
+        }
+        ride.setStatus(RideStatus.ONGOING);
+        ride.setStartTime(LocalDateTime.now());
+        return mapToDto(rideRepository.save(ride));
+    }
+
+    public RideDto cancelRide(Long rideId){
+        Ride ride = rideRepository.findById(rideId)
+                .orElseThrow(() -> new RuntimeException("Ride not found "));
+
+        ride.setStatus(RideStatus.CANCELLED);
+
+        Driver driver = ride.getDriver();
+        driver.setAvailable(true);
+        driverRepository.save(driver);
+
+        return mapToDto(rideRepository.save(ride));
     }
 
     private Double calculateFare(){
