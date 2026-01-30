@@ -4,11 +4,11 @@ package com.rideflow.controller;
 import com.rideflow.dto.RideDto;
 import com.rideflow.dto.RideRequestDto;
 import com.rideflow.service.RiderService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/rides")
@@ -19,7 +19,7 @@ public class RideController {
     private final RiderService riderService;
 
     @PostMapping("/request")
-    public ResponseEntity<RideDto> requestRide(@RequestBody RideRequestDto rideRequestDto){
+    public ResponseEntity<RideDto> requestRide(@RequestBody @Valid RideRequestDto rideRequestDto){
     return ResponseEntity.ok(riderService.requestRide(rideRequestDto));
     }
 

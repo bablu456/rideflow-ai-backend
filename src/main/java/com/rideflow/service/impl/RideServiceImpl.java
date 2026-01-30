@@ -16,6 +16,8 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Random;
+
 @Service
 @RequiredArgsConstructor
 public class RideServiceImpl implements RiderService{
@@ -47,6 +49,9 @@ public class RideServiceImpl implements RiderService{
         ride.setDropLongitude(request.getDropLongitude());
         ride.setStatus(RideStatus.REQUESTED);
         ride.setFare(calculateFare());
+        ride.setOtp(generateOTP());
+
+        System.out.println("DEV LOG-OTP for Ride: "+ride.getOtp());
 
         Ride savedRide = rideRepository.save(ride);
 
@@ -118,7 +123,11 @@ public class RideServiceImpl implements RiderService{
     }
 
     private Double calculateFare(){
-        return 150.0;
+        return 150.00;
+    }
+
+    private String generateOTP(){
+        return String.format("%04d", new Random().nextInt(10000));
     }
 
     private RideDto mapToDto(Ride ride){
