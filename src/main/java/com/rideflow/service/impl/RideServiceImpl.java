@@ -35,7 +35,7 @@ public class RideServiceImpl implements RiderService{
         List<Driver>  availableDrivers = driverRepository.findByAvailableTrue();
 
         if(availableDrivers.isEmpty()){
-            throw new RuntimeException("No Drivers Availbale nearby");
+            throw new RuntimeException("No Drivers Available nearby!");
         }
 
         Driver matchedDriver = availableDrivers.get(0);
