@@ -13,10 +13,8 @@ import java.util.function.Function;
 @Component
 public class JwtUtil {
 
-    // Generates a secure key for HS256 algorithm
     private final SecretKey SECRET_KEY = Keys.secretKeyFor(SignatureAlgorithm.HS256);
 
-    // 1. Generate Token (User login karega tab ye call hoga)
     public String generateToken(String username) {
         return Jwts.builder()
                 .subject(username)
@@ -26,18 +24,15 @@ public class JwtUtil {
                 .compact();
     }
 
-    // 2. Validate Token (Har request pe ye call hoga)
     public boolean validateToken(String token, String username) {
         final String extractedUsername = extractUsername(token);
         return (extractedUsername.equals(username) && !isTokenExpired(token));
     }
 
-    // 3. Extract Username from Token
     public String extractUsername(String token) {
         return extractClaim(token, Claims::getSubject);
     }
 
-    // Helper Methods
     public <T> T extractClaim(String token, Function<Claims, T> claimsResolver) {
         final Claims claims = extractAllClaims(token);
         return claimsResolver.apply(claims);
