@@ -41,7 +41,7 @@ public class RideflowBackendApplication {
                driverUser.setEmail("sandeep@gmail.com");
                driverUser.setPassword(passwordEncoder.encode("password"));
                driverUser.setPhone("12345678910");
-               driverUser.setRoles(Collections.singleton("DRIVER"));
+               driverUser.setRole(Collections.singleton("DRIVER").toString());
 
                User saveDriver = userRepository.save(driverUser);
 
@@ -55,4 +55,28 @@ public class RideflowBackendApplication {
             }
         };
     }
+
+    @Bean
+    CommandLineRunner initDatabase(UserRepository repository, PasswordEncoder passwordEncoder) {
+        return args -> {
+            // 1. Ek dummy user manually create karte hain check karne ke liye
+            User testUser = User.builder()
+                    .name("Test User")
+                    .email("test@flow.com")
+                    .password(passwordEncoder.encode("bablu123")) // 🔥 Password encrypt ho raha hai
+                    .role("USER")
+                    .build();
+
+            repository.save(testUser);
+
+            // 2. Terminal mein print karo verify karne ke liye
+            System.out.println("\n--- H2 DATABASE VERIFICATION ---");
+            repository.findAll().forEach(user -> {
+                System.out.println("User Email: " + user.getEmail());
+                System.out.println("BCrypt Password: " + user.getPassword());
+            });
+            System.out.println("---------------------------------\n");
+        };
+    }
+
 }
