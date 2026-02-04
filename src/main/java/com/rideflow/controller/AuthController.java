@@ -1,7 +1,9 @@
 package com.rideflow.controller;
 
-import com.rideflow.security.JwtUtil;
-import lombok.Data;
+import com.rideflow.dto.AuthRequest;
+import com.rideflow.dto.AuthResponse;
+import com.rideflow.dto.RegisterRequest;
+import com.rideflow.service.AuthenticationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -14,27 +16,15 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class AuthController {
 
-    private final JwtUtil jwtUtil;
+    private  final AuthenticationService service;
+
+    public ResponseEntity<AuthResponse> register(@RequestBody RegisterRequest request){
+        return ResponseEntity.ok(service.register(request));
+    }
 
     @PostMapping("/login")
-    public ResponseEntity<AuthResponseDto> login (@RequestBody AuthRequestDto request){
-
-        String token = jwtUtil.generateToken(request.getUsername());
-        return ResponseEntity.ok(new AuthResponseDto(token));
+    public ResponseEntity<AuthResponse> authenticate(@RequestBody AuthRequest request){
+        return ResponseEntity.ok(service.authenticate(request));
     }
-}
 
-@Data
-class AuthRequestDto{
-    private String username;
-    private String password;
-}
-
-@Data
-class AuthResponseDto{
-    private String token;
-
-    public AuthResponseDto(String token){
-        this.token = token;
-    }
 }
