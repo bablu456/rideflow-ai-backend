@@ -13,6 +13,8 @@ public interface DriverRepository  extends JpaRepository<Driver, Long> {
 
     List<Driver> findByAvailableTrue();
 
+
+
     @Query(value = "SELECT d.*, " +
             "ST_DistanceSphere(POINT(d.longitude, d.latitude), POINT(:lon, :lat)) as distance " +
             "FROM drivers d " +

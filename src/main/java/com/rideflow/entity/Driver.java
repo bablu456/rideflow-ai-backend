@@ -26,6 +26,8 @@ public class Driver {
 
     private String vehicleType;
 
+    private String vehicleNumber;
+
     private Boolean available;
 
     private Double rating = 5.0;
