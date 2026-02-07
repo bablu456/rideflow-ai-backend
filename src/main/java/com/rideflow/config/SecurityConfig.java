@@ -27,7 +27,8 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
 
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/h2-console/**", "/api/auth/**", "/swagger-ui/**").permitAll() // Ye sab allowed hain
+//                        .requestMatchers("/h2-console/**", "/api/auth/**", "/swagger-ui/**").permitAll() // Ye sab allowed hain
+                        .requestMatchers("/api/rides/calculate").permitAll()
                         .anyRequest().authenticated() // Baaki sab ke liye Login chahiye
                 )
 

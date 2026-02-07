@@ -1,5 +1,6 @@
 package com.rideflow.service;
 
+import com.rideflow.dto.FareDto;
 import com.rideflow.dto.RideDto;
 import com.rideflow.dto.RideRequestDto;
 
@@ -12,7 +13,7 @@ public interface RiderService {
     RideDto startRide(Long rideId, String otp);
     RideDto completeRide(Long rideId);
     RideDto cancelRide(Long rideId);
-
+    FareDto calculateRideFares(Double pickupLat, Double pickupLong, Double dropLat, Double dropLong);
 
 
 }

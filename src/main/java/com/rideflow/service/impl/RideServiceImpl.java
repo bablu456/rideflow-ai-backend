@@ -1,5 +1,6 @@
 package com.rideflow.service.impl;
 
+import com.rideflow.dto.FareDto;
 import com.rideflow.dto.RideDto;
 import com.rideflow.dto.RideRequestDto;
 import com.rideflow.entity.Driver;
@@ -10,6 +11,7 @@ import com.rideflow.repository.DriverRepository;
 import com.rideflow.repository.RideRepository;
 import com.rideflow.repository.UserRepository;
 import com.rideflow.service.RiderService;
+import com.rideflow.utils.DistanceCalculator;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -25,6 +27,7 @@ public class RideServiceImpl implements RiderService{
     private final RideRepository rideRepository;
     private final DriverRepository driverRepository;
     private final UserRepository userRepository;
+    private final DistanceCalculator distanceCalculator;
 
     @Override
     @Transactional
@@ -48,8 +51,16 @@ public class RideServiceImpl implements RiderService{
         ride.setDropLatitude(request.getDropLatitude());
         ride.setDropLongitude(request.getDropLongitude());
         ride.setStatus(RideStatus.REQUESTED);
-        ride.setFare(calculateFare());
         ride.setOtp(generateOTP());
+
+        Double distance = distanceCalculator.calculateDistance(
+                request.getPickupLatitude(),
+                request.getPickupLongitude(),
+                request.getDropLatitude(),
+                request.getPickupLongitude()
+        );
+
+        ride.setFare(calculateFare(distance, request.getVehichleType()));
 
         System.out.println("DEV LOG-OTP for Ride: "+ride.getOtp());
 
@@ -59,6 +70,25 @@ public class RideServiceImpl implements RiderService{
         driverRepository.save(matchedDriver);
 
         return mapToDto(savedRide);
+    }
+
+    public FareDto calculateRideFares(Double pickupLat, Double pickupLong, Double dropLat, Double dropLong){
+        Double distance = distanceCalculator.calculateDistance(pickupLat,pickupLong,dropLat,dropLong);
+
+        double baseFare = 30.0;
+
+        double bikeRate = 8.0;
+        double autoRate = 12.0;
+        double carRate = 18.0;
+        double premierRate = 25.0;
+
+        return FareDto.builder()
+                .distanceKm(Math.round(distance * 10.0) / 10.0) // 5.4 km
+                .bikeFare(Math.round((baseFare + (distance * bikeRate)) * 100.0) / 100.0)
+                .autoFare(Math.round((baseFare + (distance * autoRate)) * 100.0) / 100.0)
+                .carFare(Math.round((baseFare + (distance * carRate)) * 100.0) / 100.0)
+                .premierFare(Math.round((baseFare + (distance * premierRate)) * 100.0) / 100.0)
+                .build();
     }
 
     @Override
@@ -122,8 +152,25 @@ public class RideServiceImpl implements RiderService{
         return mapToDto(rideRepository.save(ride));
     }
 
-    private Double calculateFare(){
-        return 150.00;
+    private Double calculateFare(double distance, String vehicleType){
+        double baseFare = 30.0;
+        double ratePerkm;
+
+        switch (vehicleType.toUpperCase()){
+            case "BIKE":
+                ratePerkm = 8.0;
+                break;
+            case "AUTO":
+                ratePerkm = 12.0;
+                break;
+            case "CAR":
+            default:
+                ratePerkm=18.0;
+                break;
+        }
+        double totalFare = baseFare + (distance * ratePerkm);
+        return Math.round(totalFare * 100.0) / 100.0;
+
     }
 
     private String generateOTP(){

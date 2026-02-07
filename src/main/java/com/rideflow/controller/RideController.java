@@ -1,6 +1,7 @@
 package com.rideflow.controller;
 
 
+import com.rideflow.dto.FareDto;
 import com.rideflow.dto.RideDto;
 import com.rideflow.dto.RideRequestDto;
 import com.rideflow.service.RiderService;
@@ -23,7 +24,7 @@ public class RideController {
     return ResponseEntity.ok(riderService.requestRide(rideRequestDto));
     }
 
-    @GetMapping("/{rideId}")
+    @GetMapping("/{rideId:\\d+}")
     public ResponseEntity<RideDto> getRideStatus(@PathVariable Long rideId){
         return ResponseEntity.ok(riderService.getRideStatus(rideId));
     }
@@ -46,6 +47,16 @@ public class RideController {
     @PostMapping("/{rideId}/cancel")
     public ResponseEntity<RideDto> cancelRide(@PathVariable Long rideId){
         return ResponseEntity.ok(riderService.cancelRide(rideId));
+    }
+
+    @GetMapping("/calculate")
+    public ResponseEntity<FareDto> calculateFare(
+            @RequestParam Double pLat,
+            @RequestParam Double pLon,
+            @RequestParam Double dLat,
+            @RequestParam Double dLon
+    ){
+        return ResponseEntity.ok(riderService.calculateRideFares(pLat, pLon, dLat, dLon));
     }
 
 
