@@ -13,6 +13,7 @@ import java.util.Map;
 @RestControllerAdvice(basePackages = "com.rideflow")
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<Map<String, Object>> handleRuntimeException(RuntimeException ex){
         Map<String, Object> errorResponse = new HashMap<>();
         errorResponse.put("timestamp", LocalDateTime.now());

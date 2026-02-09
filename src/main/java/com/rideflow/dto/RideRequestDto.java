@@ -1,6 +1,5 @@
 package com.rideflow.dto;
 
-
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
@@ -10,7 +9,6 @@ import lombok.Data;
 @Data
 public class RideRequestDto {
 
-    @NotNull(message = "Passenger ID is required ")
     private Long passengerId;
 
     @NotNull(message = "Pickup Latitude is required")
@@ -23,12 +21,16 @@ public class RideRequestDto {
     @DecimalMax(value = "180.0", message = "Longitude must be valid")
     private Double pickupLongitude;
 
-
     private Double dropLatitude;
 
     @NotNull(message = "Drop Longitude is required")
     private Double dropLongitude;
 
+    private String pickupArea;
+    private String dropArea;
+
     @NotBlank(message = "Vehicle type is required")
-    private String vehichleType;
+    private String vehicleType;
+
+    private Double calculatedFare;
 }

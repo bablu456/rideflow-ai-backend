@@ -63,7 +63,7 @@ class RideServiceImplTest {
         requestDto.setPickupLongitude(77.59);
         requestDto.setDropLatitude(12.93);
         requestDto.setDropLongitude(77.62);
-        requestDto.setVehichleType("Car");
+        requestDto.setVehicleType("Car");
     }
 
     @Test

@@ -16,41 +16,44 @@ import java.util.TimeZone;
 @SpringBootApplication
 public class RideflowBackendApplication {
 
-	public static void main(String[] args) {
+    public static void main(String[] args) {
 
         TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
 
-		SpringApplication.run(RideflowBackendApplication.class, args);
-	}
+        SpringApplication.run(RideflowBackendApplication.class, args);
+    }
 
     @Bean
-    public CommandLineRunner demoData(UserRepository userRepository, DriverRepository driverRepository, PasswordEncoder passwordEncoder){
-        return  args -> {
+    public CommandLineRunner demoData(UserRepository userRepository, DriverRepository driverRepository,
+            PasswordEncoder passwordEncoder) {
+        return args -> {
 
-           if(userRepository.count() == 0){
-               User rider = new User();
-               rider.setName("Rahul Rider");
-               rider.setEmail("rahul@gmail.com");
+            if (userRepository.count() == 0) {
+                User rider = new User();
+                rider.setName("Rahul Rider");
+                rider.setEmail("rahul@gmail.com");
 
-               rider.setPassword(passwordEncoder.encode("password"));
-               rider.setPhone("8809537315");
-               User savedRider = userRepository.save(rider);
+                rider.setPassword(passwordEncoder.encode("password"));
+                rider.setPhone("8809537315");
+                User savedRider = userRepository.save(rider);
 
-               User driverUser = new User();
-               driverUser.setName("Sandeep Driver");
-               driverUser.setEmail("sandeep@gmail.com");
-               driverUser.setPassword(passwordEncoder.encode("password"));
-               driverUser.setPhone("12345678910");
-               driverUser.setRole(Collections.singleton("DRIVER").toString());
+                User driverUser = new User();
+                driverUser.setName("Sandeep Driver");
+                driverUser.setEmail("sandeep@gmail.com");
+                driverUser.setPassword(passwordEncoder.encode("password"));
+                driverUser.setPhone("12345678910");
+                driverUser.setRole(Collections.singleton("DRIVER").toString());
 
-               User saveDriver = userRepository.save(driverUser);
+                User saveDriver = userRepository.save(driverUser);
 
-               Driver driver = new Driver();
-               driver.setUser(saveDriver);
-               driver.setAvailable(true);
-               driver.setRating(4.8);
-               driver.setLicenseNumber("MH12-AB-1234");
-               driver.setVehicleType("Car");
+                Driver driver = new Driver();
+                driver.setUser(saveDriver);
+                driver.setAvailable(true);
+                driver.setRating(4.8);
+                driver.setLicenseNumber("MH12-AB-1234");
+                driver.setVehicleType("Car");
+
+                driverRepository.save(driver); // 🔥 Actually save the driver to DB!
 
             }
         };
@@ -59,15 +62,20 @@ public class RideflowBackendApplication {
     @Bean
     CommandLineRunner initDatabase(UserRepository repository, PasswordEncoder passwordEncoder) {
         return args -> {
-            // 1. Ek dummy user manually create karte hain check karne ke liye
-            User testUser = User.builder()
-                    .name("Test User")
-                    .email("test@flow.com")
-                    .password(passwordEncoder.encode("bablu123")) // 🔥 Password encrypt ho raha hai
-                    .role("USER")
-                    .build();
+            // Only insert if the user doesn't already exist
+            if (repository.existsByEmail("test@flow.com")) {
+                System.out.println("Test user already exists, skipping insertion.");
+            } else {
+                // 1. Ek dummy user manually create karte hain check karne ke liye
+                User testUser = User.builder()
+                        .name("Test User")
+                        .email("test@flow.com")
+                        .password(passwordEncoder.encode("bablu123")) // 🔥 Password encrypt ho raha hai
+                        .role("USER")
+                        .build();
 
-            repository.save(testUser);
+                repository.save(testUser);
+            }
 
             // 2. Terminal mein print karo verify karne ke liye
             System.out.println("\n--- H2 DATABASE VERIFICATION ---");

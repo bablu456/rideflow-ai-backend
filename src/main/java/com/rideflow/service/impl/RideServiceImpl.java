@@ -22,7 +22,7 @@ import java.util.Random;
 
 @Service
 @RequiredArgsConstructor
-public class RideServiceImpl implements RiderService{
+public class RideServiceImpl implements RiderService {
 
     private final RideRepository rideRepository;
     private final DriverRepository driverRepository;
@@ -31,13 +31,20 @@ public class RideServiceImpl implements RiderService{
 
     @Override
     @Transactional
-    public RideDto requestRide(RideRequestDto request){
-        User passenger = userRepository.findById(request.getPassengerId())
-                .orElseThrow(() -> new RuntimeException("Passenger not found"));
+    public RideDto requestRide(RideRequestDto request) {
+        // Get passenger - if no passengerId provided, use first user in DB as dummy
+        User passenger;
+        if (request.getPassengerId() != null) {
+            passenger = userRepository.findById(request.getPassengerId())
+                    .orElseThrow(() -> new RuntimeException("Passenger not found"));
+        } else {
+            passenger = userRepository.findAll().stream().findFirst()
+                    .orElseThrow(() -> new RuntimeException("No users exist in the system"));
+        }
 
-        List<Driver>  availableDrivers = driverRepository.findByAvailableTrue();
+        List<Driver> availableDrivers = driverRepository.findByAvailableTrue();
 
-        if(availableDrivers.isEmpty()){
+        if (availableDrivers.isEmpty()) {
             throw new RuntimeException("No Drivers Available nearby!");
         }
 
@@ -57,12 +64,11 @@ public class RideServiceImpl implements RiderService{
                 request.getPickupLatitude(),
                 request.getPickupLongitude(),
                 request.getDropLatitude(),
-                request.getPickupLongitude()
-        );
+                request.getDropLongitude());
 
-        ride.setFare(calculateFare(distance, request.getVehichleType()));
+        ride.setFare(calculateFare(distance, request.getVehicleType()));
 
-        System.out.println("DEV LOG-OTP for Ride: "+ride.getOtp());
+        System.out.println("DEV LOG-OTP for Ride: " + ride.getOtp());
 
         Ride savedRide = rideRepository.save(ride);
 
@@ -72,8 +78,8 @@ public class RideServiceImpl implements RiderService{
         return mapToDto(savedRide);
     }
 
-    public FareDto calculateRideFares(Double pickupLat, Double pickupLong, Double dropLat, Double dropLong){
-        Double distance = distanceCalculator.calculateDistance(pickupLat,pickupLong,dropLat,dropLong);
+    public FareDto calculateRideFares(Double pickupLat, Double pickupLong, Double dropLat, Double dropLong) {
+        Double distance = distanceCalculator.calculateDistance(pickupLat, pickupLong, dropLat, dropLong);
 
         double baseFare = 30.0;
 
@@ -92,7 +98,7 @@ public class RideServiceImpl implements RiderService{
     }
 
     @Override
-    public RideDto getRideStatus(Long rideId){
+    public RideDto getRideStatus(Long rideId) {
         Ride ride = rideRepository.findById(rideId)
                 .orElseThrow(() -> new RuntimeException("Ride not found"));
 
@@ -101,10 +107,10 @@ public class RideServiceImpl implements RiderService{
 
     @Override
     @Transactional
-    public RideDto acceptRide(Long rideId){
+    public RideDto acceptRide(Long rideId) {
         Ride ride = rideRepository.findById(rideId)
-                .orElseThrow(() ->new RuntimeException("Ride not found"));
-        if(ride.getStatus() != RideStatus.REQUESTED){
+                .orElseThrow(() -> new RuntimeException("Ride not found"));
+        if (ride.getStatus() != RideStatus.REQUESTED) {
             throw new RuntimeException("Ride already Processed ");
         }
         ride.setStatus(RideStatus.CONFIRMED);
@@ -113,7 +119,7 @@ public class RideServiceImpl implements RiderService{
 
     @Override
     @Transactional
-    public RideDto completeRide(Long rideId){
+    public RideDto completeRide(Long rideId) {
         Ride ride = rideRepository.findById(rideId)
                 .orElseThrow(() -> new RuntimeException("Ride not found "));
         ride.setStatus(RideStatus.COMPLETED);
@@ -128,10 +134,10 @@ public class RideServiceImpl implements RiderService{
 
     @Override
     @Transactional
-    public RideDto startRide(Long rideId, String otp){
+    public RideDto startRide(Long rideId, String otp) {
         Ride ride = rideRepository.findById(rideId).orElseThrow(() -> new RuntimeException("Ride not found"));
 
-        if(!ride.getOtp().equals(otp)){
+        if (!ride.getOtp().equals(otp)) {
             throw new RuntimeException("Invalid Otp ");
         }
         ride.setStatus(RideStatus.ONGOING);
@@ -139,7 +145,7 @@ public class RideServiceImpl implements RiderService{
         return mapToDto(rideRepository.save(ride));
     }
 
-    public RideDto cancelRide(Long rideId){
+    public RideDto cancelRide(Long rideId) {
         Ride ride = rideRepository.findById(rideId)
                 .orElseThrow(() -> new RuntimeException("Ride not found "));
 
@@ -152,11 +158,11 @@ public class RideServiceImpl implements RiderService{
         return mapToDto(rideRepository.save(ride));
     }
 
-    private Double calculateFare(double distance, String vehicleType){
+    private Double calculateFare(double distance, String vehicleType) {
         double baseFare = 30.0;
         double ratePerkm;
 
-        switch (vehicleType.toUpperCase()){
+        switch (vehicleType.toUpperCase()) {
             case "BIKE":
                 ratePerkm = 8.0;
                 break;
@@ -165,7 +171,7 @@ public class RideServiceImpl implements RiderService{
                 break;
             case "CAR":
             default:
-                ratePerkm=18.0;
+                ratePerkm = 18.0;
                 break;
         }
         double totalFare = baseFare + (distance * ratePerkm);
@@ -173,17 +179,18 @@ public class RideServiceImpl implements RiderService{
 
     }
 
-    private String generateOTP(){
+    private String generateOTP() {
         return String.format("%04d", new Random().nextInt(10000));
     }
 
-    private RideDto mapToDto(Ride ride){
-        RideDto dto  = new RideDto();
+    private RideDto mapToDto(Ride ride) {
+        RideDto dto = new RideDto();
         dto.setId(ride.getId());
         dto.setStatus(ride.getStatus());
         dto.setFare(ride.getFare());
+        dto.setOtp(ride.getOtp());
         dto.setCreatedTime(ride.getCreatedTime());
-        if(ride.getDriver() != null){
+        if (ride.getDriver() != null) {
             dto.setDriverName(ride.getDriver().getUser().getName());
             dto.setVehicleNumber(ride.getDriver().getLicenseNumber());
         }
