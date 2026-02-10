@@ -1,6 +1,5 @@
 package com.rideflow.service;
 
-
 import com.rideflow.entity.User;
 import com.rideflow.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -18,12 +17,12 @@ public class CustomUserDetailsService implements UserDetailsService {
     @Override
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found with email: "+email));
+                .orElseThrow(() -> new UsernameNotFoundException("User not found with email: " + email));
 
         return org.springframework.security.core.userdetails.User.builder()
                 .username(user.getEmail())
                 .password(user.getPassword())
-                .roles(user.getRole())
+                .roles(user.getRoles().toArray(new String[0]))
                 .build();
     }
 }

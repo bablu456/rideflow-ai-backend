@@ -1,4 +1,4 @@
-package com.rideflow.entity; // Apna package name check karo
+package com.rideflow.entity;
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -6,18 +6,21 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
 import java.util.Collection;
-import java.util.List;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
-@Table(name = "app_users") // Table name "user" mat rakhna, Postgres mein reserved word hai
-public class User implements UserDetails { // 🔥 1. Implements UserDetails
+@Table(name = "app_users")
+public class User implements UserDetails {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -32,18 +35,29 @@ public class User implements UserDetails { // 🔥 1. Implements UserDetails
 
     private String phone;
 
-    private String role; // e.g., "USER", "DRIVER"
+    private String profilePicture;
 
-    // 🔥 2. UserDetails Methods Implementation
+    /**
+     * Roles like "RIDER", "DRIVER". Stored in a separate join table.
+     */
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "user_roles", joinColumns = @JoinColumn(name = "user_id"))
+    @Column(name = "role")
+    @Builder.Default
+    private Set<String> roles = new HashSet<>();
+
+    // ─── UserDetails Implementation ─────────────────────────────
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return List.of(); // Abhi ke liye empty role list bhej rahe hain
+        return roles.stream()
+                .map(role -> new SimpleGrantedAuthority("ROLE_" + role))
+                .collect(Collectors.toList());
     }
 
     @Override
     public String getUsername() {
-        return email; // 🔥 Hum username ki jagah 'email' use kar rahe hain
+        return email;
     }
 
     @Override

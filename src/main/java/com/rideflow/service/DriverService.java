@@ -8,4 +8,5 @@ public interface DriverService {
     Driver registerDriver(Driver driver);
     Driver updateAvailability(Long driverId, boolean available);
     List<Driver> findAvailableDrivers();
+    Driver getDriverByUserEmail(String email);
 }

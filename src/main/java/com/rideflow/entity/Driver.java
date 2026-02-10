@@ -2,16 +2,16 @@ package com.rideflow.entity;
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Builder;
+import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.Setter;
 
-@Entity
-@Table(name = "drivers")
-@Getter
-@Setter
+@Data
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@Entity
+@Table(name = "drivers")
 public class Driver {
 
     @Id
@@ -19,16 +19,24 @@ public class Driver {
     private Long id;
 
     @OneToOne
-    @JoinColumn(name = "user_id",referencedColumnName = "id")
+    @JoinColumn(name = "user_id", referencedColumnName = "id")
     private User user;
 
     private String licenseNumber;
 
-    private String vehicleType;
+    private String vehicleType; // e.g., "Car", "Bike"
 
-    private String vehicleNumber;
+    private String vehiclePlateNumber;
 
-    private Boolean available;
+    @Builder.Default
+    private Boolean isAvailable = true;
 
+    @Builder.Default
     private Double rating = 5.0;
+
+    // ─── Real-time Coordinates ──────────────────────────────────
+
+    private Double currentLatitude;
+
+    private Double currentLongitude;
 }

@@ -10,16 +10,14 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
-import java.util.Collections;
+import java.util.Set;
 import java.util.TimeZone;
 
 @SpringBootApplication
 public class RideflowBackendApplication {
 
     public static void main(String[] args) {
-
         TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
-
         SpringApplication.run(RideflowBackendApplication.class, args);
     }
 
@@ -27,64 +25,56 @@ public class RideflowBackendApplication {
     public CommandLineRunner demoData(UserRepository userRepository, DriverRepository driverRepository,
             PasswordEncoder passwordEncoder) {
         return args -> {
-
             if (userRepository.count() == 0) {
+                // Create a rider user
                 User rider = new User();
                 rider.setName("Rahul Rider");
                 rider.setEmail("rahul@gmail.com");
-
                 rider.setPassword(passwordEncoder.encode("password"));
                 rider.setPhone("8809537315");
-                User savedRider = userRepository.save(rider);
+                rider.setRoles(Set.of("RIDER"));
+                userRepository.save(rider);
 
-                User driverUser = new User();
-                driverUser.setName("Sandeep Driver");
-                driverUser.setEmail("sandeep@gmail.com");
-                driverUser.setPassword(passwordEncoder.encode("password"));
-                driverUser.setPhone("12345678910");
-                driverUser.setRole(Collections.singleton("DRIVER").toString());
-
-                User saveDriver = userRepository.save(driverUser);
-
-                Driver driver = new Driver();
-                driver.setUser(saveDriver);
-                driver.setAvailable(true);
-                driver.setRating(4.8);
-                driver.setLicenseNumber("MH12-AB-1234");
-                driver.setVehicleType("Car");
-
-                driverRepository.save(driver); // 🔥 Actually save the driver to DB!
-
-            }
-        };
-    }
-
-    @Bean
-    CommandLineRunner initDatabase(UserRepository repository, PasswordEncoder passwordEncoder) {
-        return args -> {
-            // Only insert if the user doesn't already exist
-            if (repository.existsByEmail("test@flow.com")) {
-                System.out.println("Test user already exists, skipping insertion.");
-            } else {
-                // 1. Ek dummy user manually create karte hain check karne ke liye
+                // Create a test user
                 User testUser = User.builder()
                         .name("Test User")
                         .email("test@flow.com")
-                        .password(passwordEncoder.encode("bablu123")) // 🔥 Password encrypt ho raha hai
-                        .role("USER")
+                        .password(passwordEncoder.encode("bablu123"))
+                        .roles(Set.of("RIDER"))
                         .build();
-
-                repository.save(testUser);
+                userRepository.save(testUser);
             }
 
-            // 2. Terminal mein print karo verify karne ke liye
-            System.out.println("\n--- H2 DATABASE VERIFICATION ---");
-            repository.findAll().forEach(user -> {
-                System.out.println("User Email: " + user.getEmail());
-                System.out.println("BCrypt Password: " + user.getPassword());
+            if (driverRepository.count() == 0) {
+                User driverUser = userRepository.findByEmail("sandeep@gmail.com")
+                        .orElseGet(() -> {
+                            User newDriverUser = new User();
+                            newDriverUser.setName("Sandeep Driver");
+                            newDriverUser.setEmail("sandeep@gmail.com");
+                            newDriverUser.setPassword(passwordEncoder.encode("password"));
+                            newDriverUser.setPhone("12345678910");
+                            newDriverUser.setRoles(Set.of("DRIVER"));
+                            return userRepository.save(newDriverUser);
+                        });
+
+                // Create a driver profile linked to the driver user
+                Driver driver = new Driver();
+                driver.setUser(driverUser);
+                driver.setIsAvailable(true);
+                driver.setRating(4.8);
+                driver.setLicenseNumber("MH12-AB-1234");
+                driver.setVehicleType("Car");
+                driver.setVehiclePlateNumber("MH-12-AB-1234");
+                driver.setCurrentLatitude(12.97);
+                driver.setCurrentLongitude(77.59);
+                driverRepository.save(driver);
+            }
+
+            System.out.println("\n--- DATABASE SEEDED SUCCESSFULLY ---");
+            userRepository.findAll().forEach(user -> {
+                System.out.println("User: " + user.getEmail() + " | Roles: " + user.getRoles());
             });
-            System.out.println("---------------------------------\n");
+            System.out.println("------------------------------------\n");
         };
     }
-
 }

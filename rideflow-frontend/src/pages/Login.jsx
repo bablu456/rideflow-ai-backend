@@ -1,14 +1,16 @@
 import { useState } from 'react';
 import { Mail, Lock, ArrowRight, Car } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom'; // Dono imports ek saath
+import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { saveSession } from '../utils/auth';
 
 const Login = () => {
   const [formData, setFormData] = useState({
     email: '',
-    password: ''
+    password: '',
   });
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
 
   const handleChange = (e) => {
@@ -17,45 +19,39 @@ const Login = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setIsSubmitting(true);
 
     try {
-      // Backend API Call
       const response = await axios.post('http://localhost:8080/api/auth/login', formData);
 
-      console.log("Login Success! Token:", response.data.token);
+      saveSession(response.data);
 
-      // Token save karna
-      localStorage.setItem('token', response.data.token);
-
-      alert("Login Successful! 🚀");
-      navigate('/');
-
+      const role = response.data?.primaryRole || 'RIDER';
+      navigate(role === 'DRIVER' ? '/driver' : '/');
     } catch (error) {
-      console.error("Login Failed:", error);
-      // Agar error message backend se aa raha hai toh wo dikhao, nahi toh generic
-      const errorMsg = error.response?.data?.message || "Invalid Email or Password! 😢";
+      const errorMsg =
+        error.response?.data?.message ||
+        error.response?.data?.error ||
+        'Invalid Email or Password';
       alert(errorMsg);
+    } finally {
+      setIsSubmitting(false);
     }
-  }; // <--- Yeh bracket missing tha (Function close karne ke liye)
+  };
 
   return (
     <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
       <div className="bg-white w-full max-w-md rounded-2xl shadow-xl overflow-hidden">
-        
-        {/* Header Section */}
         <div className="bg-blue-600 p-8 text-center">
           <div className="flex justify-center mb-2">
             <Car className="text-white w-12 h-12" />
           </div>
           <h2 className="text-3xl font-bold text-white">RideFlow</h2>
-          <p className="text-blue-100 mt-2">Welcome back, Rider!</p>
+          <p className="text-blue-100 mt-2">Login as Rider or Driver</p>
         </div>
 
-        {/* Form Section */}
         <div className="p-8">
           <form onSubmit={handleSubmit} className="space-y-6">
-            
-            {/* Email Field */}
             <div>
               <label className="block text-gray-700 text-sm font-medium mb-2">Email Address</label>
               <div className="relative">
@@ -74,7 +70,6 @@ const Login = () => {
               </div>
             </div>
 
-            {/* Password Field */}
             <div>
               <label className="block text-gray-700 text-sm font-medium mb-2">Password</label>
               <div className="relative">
@@ -87,26 +82,25 @@ const Login = () => {
                   value={formData.password}
                   onChange={handleChange}
                   className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-                  placeholder="••••••••"
+                  placeholder="********"
                   required
                 />
               </div>
             </div>
 
-            {/* Login Button */}
             <button
               type="submit"
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg flex items-center justify-center transition-all transform hover:scale-[1.02]"
+              disabled={isSubmitting}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg flex items-center justify-center transition-all transform hover:scale-[1.02] disabled:bg-blue-300 disabled:cursor-not-allowed"
             >
-              Login
+              {isSubmitting ? 'Logging in...' : 'Login'}
               <ArrowRight className="ml-2 h-5 w-5" />
             </button>
           </form>
 
-          {/* Footer Link */}
           <div className="mt-6 text-center">
             <p className="text-gray-600 text-sm">
-              Don't have an account?{' '}
+              Need an account?{' '}
               <Link to="/signup" className="text-blue-600 font-bold hover:underline">
                 Sign Up
               </Link>

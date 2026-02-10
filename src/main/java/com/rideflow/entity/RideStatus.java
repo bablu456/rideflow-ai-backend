@@ -2,8 +2,8 @@ package com.rideflow.entity;
 
 public enum RideStatus {
     REQUESTED,
-    CONFIRMED,
-    ONGOING,
+    ACCEPTED,
+    STARTED,
     COMPLETED,
     CANCELLED
 }

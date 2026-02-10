@@ -10,8 +10,9 @@ public class RideDto {
     private Long id;
     private RideStatus status;
     private Double fare;
+    private Double distanceKm;
     private String otp;
     private String driverName;
-    private String vehicleNumber;
-    private LocalDateTime createdTime;
+    private String vehiclePlateNumber;
+    private LocalDateTime createdAt;
 }
