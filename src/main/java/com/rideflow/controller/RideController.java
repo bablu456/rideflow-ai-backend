@@ -35,6 +35,11 @@ public class RideController {
         return ResponseEntity.ok(riderService.getRidesForDriver(driverId));
     }
 
+    @GetMapping("/available")
+    public ResponseEntity<List<RideDto>> getAvailableRides() {
+        return ResponseEntity.ok(riderService.getAvailableRides());
+    }
+
     @PostMapping("/{rideId}/accept")
     public ResponseEntity<RideDto> acceptRide(@PathVariable Long rideId) {
         return ResponseEntity.ok(riderService.acceptRide(rideId));

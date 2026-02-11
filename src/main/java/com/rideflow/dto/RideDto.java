@@ -12,7 +12,12 @@ public class RideDto {
     private Double fare;
     private Double distanceKm;
     private String otp;
+    private String riderName;
+    private String pickupArea;
+    private String dropArea;
     private String driverName;
     private String vehiclePlateNumber;
+    private String driverPhone;
+    private Double driverRating;
     private LocalDateTime createdAt;
 }

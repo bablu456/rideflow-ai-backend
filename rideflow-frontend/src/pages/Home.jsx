@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
-import { MapPin, LogOut, Bike, Clock, Car, Package, CheckCircle2 } from 'lucide-react';
+import { MapPin, LogOut, Bike, Clock, Car, Package, CheckCircle2, Phone, Star } from 'lucide-react';
 import axios from 'axios';
 import L from 'leaflet';
 import { useNavigate } from 'react-router-dom';
@@ -157,7 +157,7 @@ const Home = () => {
     } catch (error) {
       alert(
         'Could not calculate fare: ' +
-          (error.response?.data?.message || error.response?.data?.error || error.message)
+        (error.response?.data?.message || error.response?.data?.error || error.message)
       );
     }
   };
@@ -228,7 +228,7 @@ const Home = () => {
   };
 
   useEffect(() => {
-    if (rideStatus !== 'SEARCHING_FOR_DRIVER' || !currentRideId || !token) return;
+    if ((rideStatus !== 'SEARCHING_FOR_DRIVER' && rideStatus !== 'DRIVER_FOUND') || !currentRideId || !token) return;
 
     const pollRideStatus = async () => {
       try {
@@ -238,11 +238,20 @@ const Home = () => {
         const latestRide = response.data;
         setRideDetails(latestRide);
 
+        if (latestRide.status === 'ACCEPTED') {
+          setRideStatus('DRIVER_FOUND');
+        }
+
         if (latestRide.status === 'STARTED') {
           setRideStatus('RIDE_STARTED');
         }
 
-        if (latestRide.status === 'CANCELLED' || latestRide.status === 'COMPLETED') {
+        if (latestRide.status === 'COMPLETED') {
+          setRideStatus('RIDE_COMPLETED');
+          return;
+        }
+
+        if (latestRide.status === 'CANCELLED') {
           resetRideState();
         }
       } catch (error) {
@@ -463,6 +472,13 @@ const Home = () => {
                 <p className="font-bold text-lg">Rs {fares.premierFare}</p>
               </div>
             </div>
+
+            <button
+              onClick={handleCancelRequest}
+              className="w-full bg-red-50 text-red-600 border border-red-200 py-3 rounded-xl font-bold hover:bg-red-100 transition shadow-sm mt-4"
+            >
+              Cancel Ride
+            </button>
           </div>
         )}
 
@@ -605,6 +621,62 @@ const Home = () => {
           </div>
         )}
 
+        {rideStatus === 'DRIVER_FOUND' && rideDetails && (
+          <div className="p-6 flex-1 flex flex-col items-center bg-white">
+            <div className="w-full mb-6">
+              <div className="flex items-center justify-between mb-2">
+                <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-bold tracking-wide uppercase">
+                  Driver Found
+                </span>
+                <span className="text-xs text-stone-500">Arriving in ~4 mins</span>
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900">Meet your driver</h2>
+            </div>
+
+            <div className="w-full bg-gray-50 rounded-2xl p-5 border border-gray-100 shadow-sm mb-6">
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 bg-stone-200 rounded-full flex items-center justify-center text-xl font-bold text-stone-600">
+                  {rideDetails.driverName?.charAt(0) || 'D'}
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-bold text-lg text-gray-900">{rideDetails.driverName}</h3>
+                  <p className="text-sm text-gray-500 flex items-center gap-1">
+                    <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
+                    {rideDetails.driverRating || '5.0'} Rating
+                  </p>
+                </div>
+                <div className="text-right">
+                  <h3 className="font-bold text-lg text-gray-900">{rideDetails.vehiclePlateNumber || 'AB-12'}</h3>
+                  <p className="text-xs text-gray-500">Vehicle No.</p>
+                </div>
+              </div>
+
+              <div className="mt-4 pt-4 border-t border-gray-200 flex items-center justify-between">
+                <button className="flex items-center gap-2 text-sm font-semibold text-gray-700 hover:text-black">
+                  <Phone className="w-4 h-4" /> {rideDetails.driverPhone || 'Contact Driver'}
+                </button>
+                {rideDetails.vehiclePlateNumber && (
+                  <span className="text-xs bg-gray-200 px-2 py-1 rounded text-gray-600 font-mono">
+                    {rideDetails.vehiclePlateNumber}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="w-full mb-6 rounded-xl border-2 border-dashed border-gray-200 bg-yellow-50 px-6 py-4 text-center">
+              <p className="text-xs uppercase tracking-[0.25em] text-yellow-700 mb-2">OTP for Driver</p>
+              <p className="text-4xl font-extrabold tracking-[0.35em] text-gray-900">{currentOtp}</p>
+            </div>
+
+            <button
+              onClick={handleCancelRequest}
+              className="mt-auto w-full bg-white text-gray-900 border border-gray-300 py-3 rounded-lg font-semibold hover:bg-gray-50 transition"
+            >
+              Cancel Ride
+            </button>
+          </div>
+        )}
+
         {rideStatus === 'RIDE_STARTED' && (
           <div className="p-6 flex-1 flex flex-col items-center justify-center bg-green-50 text-center">
             <div className="w-full rounded-2xl border border-green-200 bg-green-100 p-5 shadow-sm">
@@ -630,6 +702,34 @@ const Home = () => {
             <button
               onClick={resetRideState}
               className="mt-8 w-full max-w-xs bg-green-700 text-white py-3 rounded-lg font-semibold hover:bg-green-800 transition"
+            >
+              Back to Home
+            </button>
+          </div>
+        )}
+
+        {rideStatus === 'RIDE_COMPLETED' && (
+          <div className="p-6 flex-1 flex flex-col items-center justify-center bg-white text-center">
+            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-6 mx-auto">
+              <CheckCircle2 className="w-10 h-10 text-green-600" />
+            </div>
+            <h2 className="text-3xl font-extrabold text-gray-900 mb-2">Ride Complete!</h2>
+            <p className="text-gray-500 mb-8">You have reached your destination.</p>
+
+            <div className="w-full max-w-sm bg-gray-50 rounded-2xl p-6 border border-gray-100 shadow-sm mb-8">
+              <div className="flex justify-between items-center mb-4 border-b border-gray-200 pb-4">
+                <span className="text-gray-600 font-medium">Total Fare</span>
+                <span className="text-2xl font-bold text-gray-900">Rs {rideDetails?.fare}</span>
+              </div>
+              <div className="flex justify-between items-center text-sm text-gray-500">
+                <span>Distance</span>
+                <span>{rideDetails?.distanceKm} km</span>
+              </div>
+            </div>
+
+            <button
+              onClick={resetRideState}
+              className="w-full max-w-sm bg-black text-white py-4 rounded-xl font-bold text-lg hover:bg-gray-800 transition shadow-lg"
             >
               Back to Home
             </button>

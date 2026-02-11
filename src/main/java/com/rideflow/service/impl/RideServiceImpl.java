@@ -46,7 +46,12 @@ public class RideServiceImpl implements RiderService {
             throw new RuntimeException("No Drivers Available nearby!");
         }
 
-        Driver matchedDriver = availableDrivers.get(0);
+        if (availableDrivers.isEmpty()) {
+            throw new RuntimeException("No Drivers Available nearby!");
+        }
+
+        // Driver matchedDriver = availableDrivers.get(0); // REMOVED: Driver will be
+        // assigned when they accept
 
         Location pickupLocation = Location.builder()
                 .latitude(request.getPickupLatitude())
@@ -68,7 +73,8 @@ public class RideServiceImpl implements RiderService {
 
         Ride ride = new Ride();
         ride.setRider(passenger);
-        ride.setDriver(matchedDriver);
+        ride.setRider(passenger);
+        // ride.setDriver(matchedDriver); // REMOVED: Driver assigned on accept
         ride.setPickupLocation(pickupLocation);
         ride.setDropLocation(dropLocation);
         ride.setStatus(RideStatus.REQUESTED);
@@ -78,8 +84,9 @@ public class RideServiceImpl implements RiderService {
 
         Ride savedRide = rideRepository.save(ride);
 
-        matchedDriver.setIsAvailable(false);
-        driverRepository.save(matchedDriver);
+        // matchedDriver.setIsAvailable(false); // REMOVED: Availability changes on
+        // accept/start
+        // driverRepository.save(matchedDriver);
 
         return mapToDto(savedRide);
     }
@@ -117,10 +124,26 @@ public class RideServiceImpl implements RiderService {
                 .orElseThrow(() -> new ResourceNotFoundException("Ride", "id", rideId));
 
         if (ride.getStatus() != RideStatus.REQUESTED) {
-            throw new RuntimeException("Ride already processed");
+            throw new RuntimeException("Ride already processed or accepted by another driver");
         }
 
+        // Get current authenticated driver
+        User currentUser = (User) org.springframework.security.core.context.SecurityContextHolder.getContext()
+                .getAuthentication().getPrincipal();
+        Driver driver = driverRepository.findByUserId(currentUser.getId())
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Driver profile not found for user: " + currentUser.getId()));
+
+        if (!driver.getIsAvailable()) {
+            throw new RuntimeException("You are not marked as available.");
+        }
+
+        ride.setDriver(driver);
         ride.setStatus(RideStatus.ACCEPTED);
+
+        driver.setIsAvailable(false); // Driver is now busy
+        driverRepository.save(driver);
+
         return mapToDto(rideRepository.save(ride));
     }
 
@@ -166,13 +189,27 @@ public class RideServiceImpl implements RiderService {
         Ride ride = rideRepository.findById(rideId)
                 .orElseThrow(() -> new ResourceNotFoundException("Ride", "id", rideId));
 
-        ride.setStatus(RideStatus.CANCELLED);
+        if (ride.getStatus() == RideStatus.COMPLETED || ride.getStatus() == RideStatus.CANCELLED) {
+            throw new RuntimeException("Ride is already closed.");
+        }
 
-        Driver driver = ride.getDriver();
-        driver.setIsAvailable(true);
-        driverRepository.save(driver);
+        ride.setStatus(RideStatus.CANCELLED);
+        ride.setEndedAt(LocalDateTime.now());
+
+        if (ride.getDriver() != null) {
+            Driver driver = ride.getDriver();
+            driver.setIsAvailable(true);
+            driverRepository.save(driver);
+        }
 
         return mapToDto(rideRepository.save(ride));
+    }
+
+    @Override
+    public List<RideDto> getAvailableRides() {
+        return rideRepository.findByStatusOrderByCreatedAtDesc(RideStatus.REQUESTED).stream()
+                .map(this::mapToDto)
+                .toList();
     }
 
     @Override
@@ -218,10 +255,17 @@ public class RideServiceImpl implements RiderService {
         dto.setFare(ride.getFare());
         dto.setDistanceKm(ride.getDistanceKm());
         dto.setOtp(ride.getOtp());
+        dto.setPickupArea(ride.getPickupLocation() != null ? ride.getPickupLocation().getAddress() : "");
+        dto.setDropArea(ride.getDropLocation() != null ? ride.getDropLocation().getAddress() : "");
         dto.setCreatedAt(ride.getCreatedAt());
+        if (ride.getRider() != null) {
+            dto.setRiderName(ride.getRider().getName());
+        }
         if (ride.getDriver() != null) {
             dto.setDriverName(ride.getDriver().getUser().getName());
             dto.setVehiclePlateNumber(ride.getDriver().getVehiclePlateNumber());
+            dto.setDriverPhone(ride.getDriver().getUser().getPhone());
+            dto.setDriverRating(ride.getDriver().getRating());
         }
         return dto;
     }
