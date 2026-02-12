@@ -73,3 +73,12 @@ jwt:
 # ----------------------------------------------------------
 server:
   port: 8080
+
+# ----------------------------------------------------------
+# AI Assistant Configuration
+# ----------------------------------------------------------
+ai:
+  openai:
+    enabled: true
+    api-key: ${OPENAI_API_KEY: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}
+    model: gpt-4o-mini

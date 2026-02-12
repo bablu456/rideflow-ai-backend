@@ -3,6 +3,9 @@ import Home from './pages/Home';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
 import DriverDashboard from './pages/DriverDashboard';
+import OtpLogin from './pages/OtpLogin';
+import ForgotPassword from './pages/ForgotPassword';
+import AiAssistant from './pages/AiAssistant';
 import ProtectedRoute from './components/ProtectedRoute';
 
 function App() {
@@ -25,7 +28,17 @@ function App() {
         }
       />
       <Route path="/login" element={<Login />} />
+      <Route path="/login-otp" element={<OtpLogin />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/signup" element={<Signup />} />
+      <Route
+        path="/assistant"
+        element={
+          <ProtectedRoute>
+            <AiAssistant />
+          </ProtectedRoute>
+        }
+      />
     </Routes>
   );
 }

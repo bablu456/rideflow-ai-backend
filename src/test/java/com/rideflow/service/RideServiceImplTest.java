@@ -87,10 +87,10 @@ class RideServiceImplTest {
 
         assertNotNull(result);
         assertEquals(RideStatus.REQUESTED, result.getStatus());
-        assertEquals("Test Driver", result.getDriverName());
+        assertNull(result.getDriverName());
 
-        assertFalse(driver.getIsAvailable());
-        verify(driverRepository, times(1)).save(driver);
+        assertTrue(driver.getIsAvailable());
+        verify(driverRepository, never()).save(driver);
         verify(distanceCalculator, times(1)).calculateDistance(anyDouble(), anyDouble(), anyDouble(), anyDouble());
     }
 

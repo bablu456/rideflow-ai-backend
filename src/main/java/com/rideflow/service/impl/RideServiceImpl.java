@@ -12,6 +12,8 @@ import com.rideflow.service.RiderService;
 import com.rideflow.utils.DistanceCalculator;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import lombok.RequiredArgsConstructor;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -27,6 +29,7 @@ public class RideServiceImpl implements RiderService {
     private final DriverRepository driverRepository;
     private final UserRepository userRepository;
     private final DistanceCalculator distanceCalculator;
+    private final SimpMessagingTemplate messagingTemplate;
 
     @Override
     @Transactional
@@ -144,7 +147,11 @@ public class RideServiceImpl implements RiderService {
         driver.setIsAvailable(false); // Driver is now busy
         driverRepository.save(driver);
 
-        return mapToDto(rideRepository.save(ride));
+        Ride savedRide = rideRepository.save(ride);
+        RideDto rideDto = mapToDto(savedRide);
+        System.out.println("DEBUG: Broadcasting ACCEPTED to /topic/ride/" + rideDto.getId());
+        messagingTemplate.convertAndSend("/topic/ride/" + rideDto.getId(), rideDto);
+        return rideDto;
     }
 
     @Override
@@ -164,7 +171,11 @@ public class RideServiceImpl implements RiderService {
 
         ride.setStatus(RideStatus.STARTED);
         ride.setStartedAt(LocalDateTime.now());
-        return mapToDto(rideRepository.save(ride));
+        Ride savedRide = rideRepository.save(ride);
+        RideDto rideDto = mapToDto(savedRide);
+        System.out.println("DEBUG: Broadcasting STARTED to /topic/ride/" + rideDto.getId());
+        messagingTemplate.convertAndSend("/topic/ride/" + rideDto.getId(), rideDto);
+        return rideDto;
     }
 
     @Override
@@ -180,7 +191,11 @@ public class RideServiceImpl implements RiderService {
         driver.setIsAvailable(true);
         driverRepository.save(driver);
 
-        return mapToDto(rideRepository.save(ride));
+        Ride savedRide = rideRepository.save(ride);
+        RideDto rideDto = mapToDto(savedRide);
+        System.out.println("DEBUG: Broadcasting COMPLETED to /topic/ride/" + rideDto.getId());
+        messagingTemplate.convertAndSend("/topic/ride/" + rideDto.getId(), rideDto);
+        return rideDto;
     }
 
     @Override
@@ -202,7 +217,11 @@ public class RideServiceImpl implements RiderService {
             driverRepository.save(driver);
         }
 
-        return mapToDto(rideRepository.save(ride));
+        Ride savedRide = rideRepository.save(ride);
+        RideDto rideDto = mapToDto(savedRide);
+        System.out.println("DEBUG: Broadcasting CANCELLED to /topic/ride/" + rideDto.getId());
+        messagingTemplate.convertAndSend("/topic/ride/" + rideDto.getId(), rideDto);
+        return rideDto;
     }
 
     @Override

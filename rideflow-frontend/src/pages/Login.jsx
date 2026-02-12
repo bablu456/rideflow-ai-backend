@@ -105,6 +105,18 @@ const Login = () => {
                 Sign Up
               </Link>
             </p>
+            <div className="mt-3 text-sm space-y-1">
+              <p>
+                <Link to="/login-otp" className="text-black font-semibold hover:underline">
+                  Login with OTP
+                </Link>
+              </p>
+              <p>
+                <Link to="/forgot-password" className="text-black font-semibold hover:underline">
+                  Forgot Password?
+                </Link>
+              </p>
+            </div>
           </div>
         </div>
       </div>

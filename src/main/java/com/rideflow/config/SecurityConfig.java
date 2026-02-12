@@ -31,8 +31,8 @@ public class SecurityConfig {
 
                                 .authorizeHttpRequests(auth -> auth
                                                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                                                .requestMatchers("/api/auth/**").permitAll() // Auth endpoints (login,
-                                                                                             // register) ko allow karo
+                                                .requestMatchers("/api/auth/**", "/ws/**").permitAll() // Auth endpoints
+                                                                                                       // and WebSocket
                                                 .requestMatchers("/api/rides/calculate").permitAll()
                                                 .anyRequest().authenticated() // Baaki sab ke liye Login chahiye
                                 )

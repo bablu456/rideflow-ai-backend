@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { MapPin, LogOut, Bike, Clock, Car, Package, CheckCircle2, Phone, Star } from 'lucide-react';
@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import icon from 'leaflet/dist/images/marker-icon.png';
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
 import { clearSession, getPrimaryRole } from '../utils/auth';
+import { webSocketService } from '../services/WebSocketService';
 
 const API_BASE = 'http://localhost:8080';
 
@@ -62,6 +63,9 @@ const Home = () => {
 
   const [selectedVehicle, setSelectedVehicle] = useState(null);
   const [isBooking, setIsBooking] = useState(false);
+  const [payment, setPayment] = useState(null);
+  const [isPaying, setIsPaying] = useState(false);
+  const [paymentError, setPaymentError] = useState('');
 
   const typingTimeoutRef = useRef(null);
 
@@ -73,12 +77,18 @@ const Home = () => {
     setFares({});
     setSelectedVehicle(null);
     setIsBooking(false);
+    setPayment(null);
+    setIsPaying(false);
+    setPaymentError('');
   };
 
-  const authHeaders = {
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  };
+  const authHeaders = useMemo(
+    () => ({
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    }),
+    [token]
+  );
 
   const handleLogout = () => {
     clearSession();
@@ -227,43 +237,145 @@ const Home = () => {
     }
   };
 
+  const fetchPaymentStatus = async (rideId) => {
+    try {
+      const response = await axios.get(`${API_BASE}/api/payments/rides/${rideId}`, {
+        headers: authHeaders,
+      });
+      setPayment(response.data || null);
+      setPaymentError('');
+    } catch (error) {
+      if (error.response?.status === 404) {
+        setPayment(null);
+        return;
+      }
+      setPaymentError(
+        error.response?.data?.message ||
+        error.response?.data?.error ||
+        'Unable to fetch payment status.'
+      );
+    }
+  };
+
+  const handlePayNow = async (paymentMethod) => {
+    if (!currentRideId) return;
+
+    setPaymentError('');
+    setIsPaying(true);
+
+    try {
+      let paymentData = payment;
+
+      if (!paymentData) {
+        const initiateResponse = await axios.post(
+          `${API_BASE}/api/payments/rides/${currentRideId}/initiate`,
+          { paymentMethod },
+          { headers: authHeaders }
+        );
+        paymentData = initiateResponse.data;
+      }
+
+      if (paymentData?.paymentStatus !== 'COMPLETED') {
+        const completeResponse = await axios.post(
+          `${API_BASE}/api/payments/${paymentData.transactionId}/complete`,
+          null,
+          { headers: authHeaders }
+        );
+        paymentData = completeResponse.data;
+      }
+
+      setPayment(paymentData);
+    } catch (error) {
+      setPaymentError(
+        error.response?.data?.message ||
+        error.response?.data?.error ||
+        'Payment failed. Please try again.'
+      );
+    } finally {
+      setIsPaying(false);
+    }
+  };
+
   useEffect(() => {
-    if ((rideStatus !== 'SEARCHING_FOR_DRIVER' && rideStatus !== 'DRIVER_FOUND') || !currentRideId || !token) return;
+    const handleRideUpdate = (updatedRide) => {
+      setRideDetails(updatedRide);
 
-    const pollRideStatus = async () => {
-      try {
-        const response = await axios.get(`${API_BASE}/api/rides/${currentRideId}`, {
-          headers: authHeaders,
-        });
-        const latestRide = response.data;
-        setRideDetails(latestRide);
+      if (updatedRide.status === 'ACCEPTED') {
+        setRideStatus('DRIVER_FOUND');
+      }
 
-        if (latestRide.status === 'ACCEPTED') {
-          setRideStatus('DRIVER_FOUND');
-        }
+      if (updatedRide.status === 'STARTED') {
+        setRideStatus('RIDE_STARTED');
+      }
 
-        if (latestRide.status === 'STARTED') {
-          setRideStatus('RIDE_STARTED');
-        }
+      if (updatedRide.status === 'COMPLETED') {
+        setRideStatus('RIDE_COMPLETED');
+      }
 
-        if (latestRide.status === 'COMPLETED') {
-          setRideStatus('RIDE_COMPLETED');
-          return;
-        }
-
-        if (latestRide.status === 'CANCELLED') {
-          resetRideState();
-        }
-      } catch (error) {
-        console.error('Polling failed:', error);
+      if (updatedRide.status === 'CANCELLED') {
+        resetRideState();
       }
     };
 
-    pollRideStatus();
-    const interval = setInterval(pollRideStatus, 5000);
-    return () => clearInterval(interval);
+    // Connect to WebSocket when component mounts
+    webSocketService.connect(() => {
+      console.log('Connected to WebSocket - Home.jsx');
+
+      // DEBUG: Subscribe to a known public topic if available, or just log
+      // If there is an active ride, subscribe to it
+      if (currentRideId) {
+        console.log('Subscribing to ride:', currentRideId);
+        webSocketService.subscribe(`/topic/ride/${currentRideId}`, handleRideUpdate);
+      }
+    });
+
+    // Cleanup on unmount
+    return () => {
+      webSocketService.disconnect();
+    };
+  }, []); // Run once on mount
+
+  // Specialized effect to handle subscription updates when currentRideId changes
+  useEffect(() => {
+    if (!currentRideId) return;
+
+    const handleRideUpdate = (updatedRide) => {
+      console.log('Received ride update:', updatedRide);
+      setRideDetails(updatedRide);
+
+      if (updatedRide.status === 'ACCEPTED') {
+        setRideStatus('DRIVER_FOUND');
+      }
+
+      if (updatedRide.status === 'STARTED') {
+        setRideStatus('RIDE_STARTED');
+      }
+
+      if (updatedRide.status === 'COMPLETED') {
+        setRideStatus('RIDE_COMPLETED');
+      }
+
+      if (updatedRide.status === 'CANCELLED') {
+        resetRideState();
+      }
+    };
+
+    console.log('Subscribing to new ride ID:', currentRideId);
+    const subscription = webSocketService.subscribe(`/topic/ride/${currentRideId}`, handleRideUpdate);
+
+    return () => {
+      if (subscription) {
+        subscription.unsubscribe();
+      }
+    };
+  }, [currentRideId]);
+
+  useEffect(() => {
+    if (rideStatus === 'RIDE_COMPLETED' && currentRideId) {
+      fetchPaymentStatus(currentRideId);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rideStatus, currentRideId, token]);
+  }, [rideStatus, currentRideId]);
 
   return (
     <div className="relative h-screen w-full overflow-hidden font-sans">
@@ -274,12 +386,20 @@ const Home = () => {
         }`}
       </style>
 
-      <button
-        onClick={handleLogout}
-        className="absolute top-4 right-4 z-[1000] bg-white p-3 rounded-full shadow-lg hover:bg-red-50 text-red-600 transition"
-      >
-        <LogOut size={20} />
-      </button>
+      <div className="absolute top-4 right-4 z-[1000] flex items-center gap-2">
+        <button
+          onClick={() => navigate('/assistant')}
+          className="bg-white px-4 py-2 rounded-full shadow-lg hover:bg-gray-100 text-gray-900 font-semibold transition"
+        >
+          AI
+        </button>
+        <button
+          onClick={handleLogout}
+          className="bg-white p-3 rounded-full shadow-lg hover:bg-red-50 text-red-600 transition"
+        >
+          <LogOut size={20} />
+        </button>
+      </div>
 
       <div className="absolute inset-0 z-0">
         <MapContainer center={[25.5941, 85.1376]} zoom={13} zoomControl={false} className="h-full w-full">
@@ -576,26 +696,26 @@ const Home = () => {
                 <div className="mt-4 text-sm text-gray-600 space-y-1">
                   <p>
                     Status:{' '}
-                    <span className="font-semibold text-gray-800">{rideDetails.status || 'REQUESTED'}</span>
+                    <span className="font-semibold text-gray-800">{rideDetails?.status || 'REQUESTED'}</span>
                   </p>
-                  {rideDetails.driverName && (
+                  {rideDetails?.driverName && (
                     <p>
                       Driver: <span className="font-semibold text-gray-800">{rideDetails.driverName}</span>
                     </p>
                   )}
-                  {rideDetails.vehiclePlateNumber && (
+                  {rideDetails?.vehiclePlateNumber && (
                     <p>
                       Vehicle:{' '}
                       <span className="font-semibold text-gray-800">{rideDetails.vehiclePlateNumber}</span>
                     </p>
                   )}
-                  {rideDetails.distanceKm && (
+                  {rideDetails?.distanceKm && (
                     <p>
                       Distance:{' '}
                       <span className="font-semibold text-gray-800">{rideDetails.distanceKm} km</span>
                     </p>
                   )}
-                  {rideDetails.fare && (
+                  {rideDetails?.fare && (
                     <p>
                       Fare: <span className="font-semibold text-gray-800">Rs {rideDetails.fare}</span>
                     </p>
@@ -725,6 +845,49 @@ const Home = () => {
                 <span>Distance</span>
                 <span>{rideDetails?.distanceKm} km</span>
               </div>
+            </div>
+
+            <div className="w-full max-w-sm mb-6 space-y-3">
+              {payment?.paymentStatus === 'COMPLETED' ? (
+                <div className="rounded-xl border border-emerald-300 bg-emerald-50 p-4 text-emerald-800 text-left">
+                  <p className="font-semibold">Payment completed</p>
+                  <p className="text-xs mt-1">Transaction: {payment.transactionId}</p>
+                  <p className="text-xs mt-1">Method: {payment.paymentMethod}</p>
+                </div>
+              ) : (
+                <>
+                  {paymentError && (
+                    <div className="rounded-xl border border-rose-300 bg-rose-50 p-3 text-rose-800 text-sm text-left">
+                      {paymentError}
+                    </div>
+                  )}
+                  <p className="text-sm text-gray-600">Select payment method</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      onClick={() => handlePayNow('CARD')}
+                      disabled={isPaying}
+                      className="border border-gray-300 rounded-lg py-2 text-sm font-semibold hover:bg-gray-50 disabled:bg-gray-100 disabled:text-gray-400"
+                    >
+                      Card
+                    </button>
+                    <button
+                      onClick={() => handlePayNow('WALLET')}
+                      disabled={isPaying}
+                      className="border border-gray-300 rounded-lg py-2 text-sm font-semibold hover:bg-gray-50 disabled:bg-gray-100 disabled:text-gray-400"
+                    >
+                      Wallet
+                    </button>
+                    <button
+                      onClick={() => handlePayNow('CASH')}
+                      disabled={isPaying}
+                      className="border border-gray-300 rounded-lg py-2 text-sm font-semibold hover:bg-gray-50 disabled:bg-gray-100 disabled:text-gray-400"
+                    >
+                      Cash
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500">{isPaying ? 'Processing payment...' : 'Pay now to close trip billing.'}</p>
+                </>
+              )}
             </div>
 
             <button
