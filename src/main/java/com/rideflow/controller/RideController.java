@@ -4,6 +4,7 @@ import com.rideflow.dto.FareDto;
 import com.rideflow.dto.RideDto;
 import com.rideflow.dto.RideRequestDto;
 import com.rideflow.dto.StartRideRequestDto;
+import com.rideflow.entity.Driver;
 import com.rideflow.service.RiderService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +24,13 @@ public class RideController {
     @PostMapping("/request")
     public ResponseEntity<RideDto> requestRide(@RequestBody @Valid RideRequestDto rideRequestDto) {
         return ResponseEntity.ok(riderService.requestRide(rideRequestDto));
+    }
+
+    @GetMapping("/best-drivers")
+    public ResponseEntity<List<Driver>> findBestDrivers(
+            @RequestParam Double pLat,
+            @RequestParam Double pLon) {
+        return ResponseEntity.ok(riderService.findBestDrivers(pLat, pLon));
     }
 
     @GetMapping("/{rideId:\\d+}")

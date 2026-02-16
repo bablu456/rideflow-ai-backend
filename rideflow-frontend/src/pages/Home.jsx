@@ -66,6 +66,9 @@ const Home = () => {
   const [payment, setPayment] = useState(null);
   const [isPaying, setIsPaying] = useState(false);
   const [paymentError, setPaymentError] = useState('');
+  const [nearbyDrivers, setNearbyDrivers] = useState([]);
+  const [nearbyDriversLoading, setNearbyDriversLoading] = useState(false);
+  const [nearbyDriversError, setNearbyDriversError] = useState('');
 
   const typingTimeoutRef = useRef(null);
 
@@ -80,6 +83,9 @@ const Home = () => {
     setPayment(null);
     setIsPaying(false);
     setPaymentError('');
+    setNearbyDrivers([]);
+    setNearbyDriversLoading(false);
+    setNearbyDriversError('');
   };
 
   const authHeaders = useMemo(
@@ -204,7 +210,7 @@ const Home = () => {
 
       if (message?.toLowerCase().includes('no drivers available')) {
         alert(
-          'No drivers are online right now. Register/login as a driver and go online from Driver Dashboard.'
+          'No online drivers with active location found right now. Ask drivers to go online and update location from Driver Dashboard.'
         );
       } else {
         alert('Could not book ride. ' + message);
@@ -234,6 +240,32 @@ const Home = () => {
       console.error('Error cancelling ride:', error);
     } finally {
       resetRideState();
+    }
+  };
+
+  const fetchNearbyDrivers = async (lat, lon) => {
+    if (lat == null || lon == null) {
+      setNearbyDrivers([]);
+      return;
+    }
+
+    setNearbyDriversLoading(true);
+    setNearbyDriversError('');
+    try {
+      const response = await axios.get(`${API_BASE}/api/driver/nearby`, {
+        params: { pLat: lat, pLon: lon, radiusKm: 5 },
+        headers: authHeaders,
+      });
+      setNearbyDrivers(response.data || []);
+    } catch (error) {
+      setNearbyDrivers([]);
+      setNearbyDriversError(
+        error.response?.data?.message ||
+        error.response?.data?.error ||
+        'Unable to fetch nearby drivers.'
+      );
+    } finally {
+      setNearbyDriversLoading(false);
     }
   };
 
@@ -377,6 +409,17 @@ const Home = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rideStatus, currentRideId]);
 
+  useEffect(() => {
+    if (!pickupCoords) {
+      setNearbyDrivers([]);
+      setNearbyDriversError('');
+      return;
+    }
+
+    fetchNearbyDrivers(pickupCoords.lat, pickupCoords.lon);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pickupCoords]);
+
   return (
     <div className="relative h-screen w-full overflow-hidden font-sans">
       <style>
@@ -408,6 +451,12 @@ const Home = () => {
           {dropCoords && <MapRecenter lat={dropCoords.lat} lng={dropCoords.lon} />}
           {pickupCoords && <Marker position={[pickupCoords.lat, pickupCoords.lon]} />}
           {dropCoords && <Marker position={[dropCoords.lat, dropCoords.lon]} />}
+          {nearbyDrivers.map((driver) => (
+            <Marker
+              key={driver.driverId}
+              position={[driver.latitude, driver.longitude]}
+            />
+          ))}
         </MapContainer>
       </div>
 
@@ -494,6 +543,55 @@ const Home = () => {
             >
               Search Rides
             </button>
+
+            {pickupCoords && (
+              <div className="mt-5 rounded-xl border border-gray-200 bg-white p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs uppercase tracking-[0.2em] text-gray-500">Online drivers (sorted by nearest)</p>
+                  {nearbyDriversLoading ? (
+                    <span className="text-xs text-gray-500">Checking...</span>
+                  ) : (
+                    <span className="text-xs text-gray-500">{nearbyDrivers.length} found</span>
+                  )}
+                </div>
+
+                {nearbyDriversError && (
+                  <p className="text-xs text-rose-600">{nearbyDriversError}</p>
+                )}
+
+                {!nearbyDriversLoading && nearbyDrivers.length === 0 && !nearbyDriversError && (
+                  <p className="text-sm text-gray-600">
+                    No online drivers with location available right now. Drivers must update current location and go online.
+                  </p>
+                )}
+
+                {nearbyDrivers.length > 0 && (
+                  <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                    {nearbyDrivers.map((driver, index) => (
+                      <div key={driver.driverId} className="flex items-center justify-between text-sm bg-gray-50 border border-gray-100 rounded-lg px-3 py-2">
+                        <div>
+                          <p className="font-semibold text-gray-900 flex items-center gap-2">
+                            {driver.driverName}
+                            {index === 0 && (
+                              <span className="text-[10px] uppercase tracking-wide bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">
+                                Nearest
+                              </span>
+                            )}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {driver.vehicleType} - {driver.vehiclePlateNumber}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-semibold text-gray-800">{driver.distanceKm} km</p>
+                          <p className="text-xs text-amber-600">★ {driver.rating?.toFixed?.(1) ?? driver.rating}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 

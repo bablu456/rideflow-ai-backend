@@ -79,6 +79,6 @@ server:
 # ----------------------------------------------------------
 ai:
   openai:
-    enabled: true
-    api-key: ${OPENAI_API_KEY}
+    enabled: false
+    api-key: ""
     model: gpt-4o-mini

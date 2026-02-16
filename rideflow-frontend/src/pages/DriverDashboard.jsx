@@ -12,10 +12,16 @@ import {
   Play,
   Bell,
   X,
+  MapPin,
+  User,
+  Star,
+  Wallet,
+  Navigation,
 } from 'lucide-react';
 import { clearSession, getPrimaryRole } from '../utils/auth';
 
 const API_BASE = 'http://localhost:8080';
+const AUTO_LOCATION_SYNC_INTERVAL_MS = 30000;
 
 const statusBadgeClass = (status) => {
   switch (status) {
@@ -70,6 +76,20 @@ const DriverDashboard = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [banner, setBanner] = useState('');
+  const [profileStats, setProfileStats] = useState(null);
+  const [profileForm, setProfileForm] = useState({
+    name: '',
+    phone: '',
+    profilePicture: '',
+  });
+  const [locationForm, setLocationForm] = useState({
+    latitude: '',
+    longitude: '',
+  });
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [locationSaving, setLocationSaving] = useState(false);
+  const [autoLocationSyncEnabled, setAutoLocationSyncEnabled] = useState(true);
+  const [autoLocationStatus, setAutoLocationStatus] = useState('');
 
   const [showNotification, setShowNotification] = useState(false);
   const [previousAvailableRides, setPreviousAvailableRides] = useState([]);
@@ -110,6 +130,21 @@ const DriverDashboard = () => {
       });
       const driverProfile = meResponse.data;
       setDriver(driverProfile);
+
+      const statsResponse = await axios.get(`${API_BASE}/api/driver/me/stats`, {
+        headers: authHeaders,
+      });
+      const stats = statsResponse.data;
+      setProfileStats(stats);
+      setProfileForm({
+        name: stats?.name || '',
+        phone: stats?.phone || '',
+        profilePicture: stats?.profilePicture || '',
+      });
+      setLocationForm({
+        latitude: stats?.currentLatitude != null ? String(stats.currentLatitude) : '',
+        longitude: stats?.currentLongitude != null ? String(stats.currentLongitude) : '',
+      });
 
       // Fetch Active/History Rides for this driver
       const ridesResponse = await axios.get(
@@ -197,6 +232,170 @@ const DriverDashboard = () => {
         availabilityError.response?.data?.error ||
         'Failed to update availability.'
       );
+    }
+  };
+
+  const updateDriverLocationOnServer = async (
+    latitude,
+    longitude,
+    { showSuccessBanner = false, refreshAfterSave = false } = {}
+  ) => {
+    const response = await axios.put(
+      `${API_BASE}/api/driver/me/location`,
+      { latitude, longitude },
+      { headers: authHeaders }
+    );
+
+    const updatedDriver = response.data;
+    setDriver(updatedDriver);
+    setLocationForm({
+      latitude: updatedDriver?.currentLatitude != null ? String(updatedDriver.currentLatitude) : String(latitude),
+      longitude: updatedDriver?.currentLongitude != null ? String(updatedDriver.currentLongitude) : String(longitude),
+    });
+    setProfileStats((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        available: updatedDriver?.isAvailable ?? prev.available,
+        currentLatitude: updatedDriver?.currentLatitude ?? latitude,
+        currentLongitude: updatedDriver?.currentLongitude ?? longitude,
+      };
+    });
+
+    if (showSuccessBanner) {
+      setBanner('Location updated successfully. You are now discoverable by nearby riders.');
+    }
+
+    if (refreshAfterSave) {
+      await fetchDashboardData(true);
+    }
+  };
+
+  const getCurrentBrowserLocation = () => {
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) {
+        reject(new Error('Geolocation is not supported in this browser.'));
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          resolve({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+          });
+        },
+        () => reject(new Error('Unable to fetch your current location. Please allow location access.')),
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 15000,
+        }
+      );
+    });
+  };
+
+  const handleUseCurrentLocation = async () => {
+    setError('');
+    try {
+      const coords = await getCurrentBrowserLocation();
+      setLocationForm({
+        latitude: String(coords.latitude),
+        longitude: String(coords.longitude),
+      });
+      setBanner('Current device location detected. Click "Save Location" to update.');
+    } catch (locationError) {
+      setError(locationError.message || 'Unable to fetch your current location.');
+    }
+  };
+
+  const handleSaveLocation = async () => {
+    const latitude = Number(locationForm.latitude);
+    const longitude = Number(locationForm.longitude);
+
+    if (Number.isNaN(latitude) || Number.isNaN(longitude)) {
+      setError('Please enter valid latitude and longitude.');
+      return;
+    }
+
+    setError('');
+    setLocationSaving(true);
+    try {
+      await updateDriverLocationOnServer(latitude, longitude, {
+        showSuccessBanner: true,
+        refreshAfterSave: true,
+      });
+    } catch (locationError) {
+      setError(
+        locationError.response?.data?.message ||
+        locationError.response?.data?.error ||
+        'Failed to update location.'
+      );
+    } finally {
+      setLocationSaving(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!token) return;
+
+    if (!autoLocationSyncEnabled) {
+      setAutoLocationStatus('Auto location sync is disabled.');
+      return;
+    }
+
+    if (!driver?.isAvailable) {
+      setAutoLocationStatus('Auto location sync is paused while offline.');
+      return;
+    }
+
+    let cancelled = false;
+
+    const syncLocation = async () => {
+      try {
+        const coords = await getCurrentBrowserLocation();
+        if (cancelled) return;
+
+        await updateDriverLocationOnServer(coords.latitude, coords.longitude);
+        if (cancelled) return;
+
+        setAutoLocationStatus(`Auto-synced at ${new Date().toLocaleTimeString()}`);
+      } catch (locationError) {
+        if (cancelled) return;
+        setAutoLocationStatus(locationError.message || 'Auto location sync failed.');
+      }
+    };
+
+    syncLocation();
+    const interval = setInterval(syncLocation, AUTO_LOCATION_SYNC_INTERVAL_MS);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, driver?.isAvailable, autoLocationSyncEnabled]);
+
+  const handleSaveProfile = async () => {
+    setError('');
+    setProfileSaving(true);
+    try {
+      const response = await axios.put(
+        `${API_BASE}/api/driver/me/profile`,
+        profileForm,
+        { headers: authHeaders }
+      );
+      setProfileStats(response.data);
+      setBanner('Profile updated successfully.');
+      await fetchDashboardData(true);
+    } catch (profileError) {
+      setError(
+        profileError.response?.data?.message ||
+        profileError.response?.data?.error ||
+        'Failed to update profile.'
+      );
+    } finally {
+      setProfileSaving(false);
     }
   };
 
@@ -332,31 +531,138 @@ const DriverDashboard = () => {
               <div className="text-sm text-stone-600">Loading driver dashboard...</div>
             ) : (
               <>
-                <div className="rounded-2xl border border-stone-200 bg-stone-50 p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.2em] text-stone-500 mb-1">Driver profile</p>
-                    <p className="text-lg font-bold text-stone-900">{driver?.user?.name || 'Driver'}</p>
-                    <p className="text-sm text-stone-600">{driver?.vehicleType || 'Vehicle'} - {driver?.vehiclePlateNumber || 'N/A'}</p>
+                <div className="rounded-2xl border border-stone-200 bg-stone-50 p-5 space-y-5">
+                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.2em] text-stone-500 mb-1">Driver profile</p>
+                      <p className="text-lg font-bold text-stone-900">{driver?.user?.name || profileStats?.name || 'Driver'}</p>
+                      <p className="text-sm text-stone-600">{driver?.vehicleType || 'Vehicle'} - {driver?.vehiclePlateNumber || 'N/A'}</p>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => handleAvailability(!(driver?.isAvailable ?? false))}
+                        className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition ${driver?.isAvailable
+                          ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                          : 'bg-zinc-900 text-white hover:bg-black'
+                          }`}
+                      >
+                        <Power className="w-4 h-4" />
+                        {driver?.isAvailable ? 'Go Offline' : 'Go Online'}
+                      </button>
+
+                      <button
+                        onClick={() => fetchDashboardData(true)}
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-stone-300 text-stone-700 hover:bg-stone-100 text-sm font-semibold transition"
+                      >
+                        <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} /> Refresh
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={() => handleAvailability(!(driver?.isAvailable ?? false))}
-                      className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition ${driver?.isAvailable
-                        ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                        : 'bg-zinc-900 text-white hover:bg-black'
-                        }`}
-                    >
-                      <Power className="w-4 h-4" />
-                      {driver?.isAvailable ? 'Go Offline' : 'Go Online'}
-                    </button>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div className="rounded-xl bg-white border border-stone-200 p-3">
+                      <p className="text-[11px] text-stone-500 uppercase">Rating</p>
+                      <p className="font-bold text-stone-900 flex items-center gap-1"><Star className="w-4 h-4 text-amber-500" />{profileStats?.rating ?? driver?.rating ?? 5}</p>
+                    </div>
+                    <div className="rounded-xl bg-white border border-stone-200 p-3">
+                      <p className="text-[11px] text-stone-500 uppercase">Completed</p>
+                      <p className="font-bold text-stone-900">{profileStats?.completedRides ?? 0}</p>
+                    </div>
+                    <div className="rounded-xl bg-white border border-stone-200 p-3">
+                      <p className="text-[11px] text-stone-500 uppercase">Cancelled</p>
+                      <p className="font-bold text-stone-900">{profileStats?.cancelledRides ?? 0}</p>
+                    </div>
+                    <div className="rounded-xl bg-white border border-stone-200 p-3">
+                      <p className="text-[11px] text-stone-500 uppercase">Total Earnings</p>
+                      <p className="font-bold text-stone-900 flex items-center gap-1"><Wallet className="w-4 h-4 text-emerald-600" />Rs {profileStats?.totalEarnings ?? 0}</p>
+                    </div>
+                  </div>
 
-                    <button
-                      onClick={() => fetchDashboardData(true)}
-                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-stone-300 text-stone-700 hover:bg-stone-100 text-sm font-semibold transition"
-                    >
-                      <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} /> Refresh
-                    </button>
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div className="rounded-xl bg-white border border-stone-200 p-4 space-y-3">
+                      <p className="text-xs uppercase tracking-[0.15em] text-stone-500 font-semibold flex items-center gap-2">
+                        <MapPin className="w-4 h-4" /> Driver location
+                      </p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          type="number"
+                          step="0.000001"
+                          value={locationForm.latitude}
+                          onChange={(e) => setLocationForm((prev) => ({ ...prev, latitude: e.target.value }))}
+                          placeholder="Latitude"
+                          className="border border-stone-300 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black"
+                        />
+                        <input
+                          type="number"
+                          step="0.000001"
+                          value={locationForm.longitude}
+                          onChange={(e) => setLocationForm((prev) => ({ ...prev, longitude: e.target.value }))}
+                          placeholder="Longitude"
+                          className="border border-stone-300 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black"
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={handleUseCurrentLocation}
+                          className="flex-1 border border-stone-300 rounded-lg py-2 text-sm font-semibold hover:bg-stone-100 transition inline-flex items-center justify-center gap-1"
+                        >
+                          <Navigation className="w-4 h-4" /> Use Current
+                        </button>
+                        <button
+                          onClick={handleSaveLocation}
+                          disabled={locationSaving}
+                          className="flex-1 bg-black text-white rounded-lg py-2 text-sm font-semibold hover:bg-stone-800 disabled:bg-stone-400 transition"
+                        >
+                          {locationSaving ? 'Saving...' : 'Save Location'}
+                        </button>
+                      </div>
+                      <label className="flex items-center gap-2 text-xs text-stone-700">
+                        <input
+                          type="checkbox"
+                          checked={autoLocationSyncEnabled}
+                          onChange={(e) => setAutoLocationSyncEnabled(e.target.checked)}
+                          className="rounded border-stone-300"
+                        />
+                        Auto-sync location every {AUTO_LOCATION_SYNC_INTERVAL_MS / 1000}s when online
+                      </label>
+                      <p className="text-xs text-stone-500">{autoLocationStatus || 'Location sync status will appear here.'}</p>
+                      <p className="text-xs text-stone-500">Riders can see and match with you only if your location is updated.</p>
+                    </div>
+
+                    <div className="rounded-xl bg-white border border-stone-200 p-4 space-y-3">
+                      <p className="text-xs uppercase tracking-[0.15em] text-stone-500 font-semibold flex items-center gap-2">
+                        <User className="w-4 h-4" /> Profile settings
+                      </p>
+                      <input
+                        type="text"
+                        value={profileForm.name}
+                        onChange={(e) => setProfileForm((prev) => ({ ...prev, name: e.target.value }))}
+                        placeholder="Full name"
+                        className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black"
+                      />
+                      <input
+                        type="text"
+                        value={profileForm.phone}
+                        onChange={(e) => setProfileForm((prev) => ({ ...prev, phone: e.target.value }))}
+                        placeholder="Phone number"
+                        className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black"
+                      />
+                      <input
+                        type="text"
+                        value={profileForm.profilePicture}
+                        onChange={(e) => setProfileForm((prev) => ({ ...prev, profilePicture: e.target.value }))}
+                        placeholder="Profile image URL (optional)"
+                        className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black"
+                      />
+                      <button
+                        onClick={handleSaveProfile}
+                        disabled={profileSaving}
+                        className="w-full bg-black text-white rounded-lg py-2 text-sm font-semibold hover:bg-stone-800 disabled:bg-stone-400 transition"
+                      >
+                        {profileSaving ? 'Saving...' : 'Save Profile'}
+                      </button>
+                    </div>
                   </div>
                 </div>
 

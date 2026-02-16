@@ -33,4 +33,42 @@ public interface DriverRepository extends JpaRepository<Driver, Long> {
             "ORDER BY SQRT(POWER(d.current_latitude - :lat, 2) + POWER(d.current_longitude - :lon, 2)) ASC " +
             "LIMIT 10", nativeQuery = true)
     List<Driver> findNearestDrivers(@Param("lat") Double lat, @Param("lon") Double lon);
+
+    /**
+     * Finds available drivers inside the given radius (in KM) from pickup point.
+     * Uses Haversine formula in PostgreSQL.
+     */
+    @Query(value = """
+            SELECT d.*
+            FROM drivers d
+            WHERE d.is_available = true
+              AND d.current_latitude IS NOT NULL
+              AND d.current_longitude IS NOT NULL
+              AND (
+                6371 * acos(
+                  LEAST(1.0, GREATEST(-1.0,
+                    cos(radians(:pickupLat))
+                    * cos(radians(d.current_latitude))
+                    * cos(radians(d.current_longitude) - radians(:pickupLon))
+                    + sin(radians(:pickupLat))
+                    * sin(radians(d.current_latitude))
+                  ))
+                )
+              ) <= :radiusKm
+            ORDER BY (
+              6371 * acos(
+                LEAST(1.0, GREATEST(-1.0,
+                  cos(radians(:pickupLat))
+                  * cos(radians(d.current_latitude))
+                  * cos(radians(d.current_longitude) - radians(:pickupLon))
+                  + sin(radians(:pickupLat))
+                  * sin(radians(d.current_latitude))
+                ))
+              )
+            ) ASC
+            """, nativeQuery = true)
+    List<Driver> findAvailableDriversWithinRadius(
+            @Param("pickupLat") Double pickupLat,
+            @Param("pickupLon") Double pickupLon,
+            @Param("radiusKm") Double radiusKm);
 }

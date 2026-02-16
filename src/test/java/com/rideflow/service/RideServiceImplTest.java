@@ -17,6 +17,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 
 import java.util.List;
 import java.util.Optional;
@@ -24,6 +25,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyDouble;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -41,6 +43,9 @@ class RideServiceImplTest {
     @Mock
     private DistanceCalculator distanceCalculator;
 
+    @Mock
+    private SimpMessagingTemplate messagingTemplate;
+
     @InjectMocks
     private RideServiceImpl rideService;
 
@@ -57,6 +62,8 @@ class RideServiceImplTest {
         driver = new Driver();
         driver.setId(1L);
         driver.setIsAvailable(true);
+        driver.setCurrentLatitude(12.98);
+        driver.setCurrentLongitude(77.60);
         User driverUser = new User();
         driverUser.setName("Test Driver");
         driver.setUser(driverUser);
@@ -74,7 +81,8 @@ class RideServiceImplTest {
     void requestRide_ShouldBookRide_WhenDriverIsAvailable() {
 
         when(userRepository.findById(1L)).thenReturn(Optional.of(passenger));
-        when(driverRepository.findByIsAvailableTrue()).thenReturn(List.of(driver));
+        when(driverRepository.findAvailableDriversWithinRadius(anyDouble(), anyDouble(), eq(5.0)))
+                .thenReturn(List.of(driver));
         when(distanceCalculator.calculateDistance(anyDouble(), anyDouble(), anyDouble(), anyDouble()))
                 .thenReturn(5.0); // 5 km distance
         when(rideRepository.save(any(Ride.class))).thenAnswer(invocation -> {
@@ -91,13 +99,16 @@ class RideServiceImplTest {
 
         assertTrue(driver.getIsAvailable());
         verify(driverRepository, never()).save(driver);
-        verify(distanceCalculator, times(1)).calculateDistance(anyDouble(), anyDouble(), anyDouble(), anyDouble());
+        verify(distanceCalculator, times(2)).calculateDistance(anyDouble(), anyDouble(), anyDouble(), anyDouble());
     }
 
     @Test
     void requestRide_ShouldThrowException_WhenNoDriverAvailable() {
         when(userRepository.findById(1L)).thenReturn(Optional.of(passenger));
-        when(driverRepository.findByIsAvailableTrue()).thenReturn(List.of());
+        when(driverRepository.findAvailableDriversWithinRadius(anyDouble(), anyDouble(), eq(5.0)))
+                .thenReturn(List.of());
+        when(driverRepository.findAvailableDriversWithinRadius(anyDouble(), anyDouble(), eq(10.0)))
+                .thenReturn(List.of());
 
         Exception exception = assertThrows(RuntimeException.class, () -> {
             rideService.requestRide(requestDto);

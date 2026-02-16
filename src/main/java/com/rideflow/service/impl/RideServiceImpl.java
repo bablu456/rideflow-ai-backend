@@ -12,7 +12,6 @@ import com.rideflow.service.RiderService;
 import com.rideflow.utils.DistanceCalculator;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
-import lombok.RequiredArgsConstructor;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
@@ -24,6 +23,11 @@ import java.util.Random;
 @Service
 @RequiredArgsConstructor
 public class RideServiceImpl implements RiderService {
+
+    private static final double PRIMARY_MATCH_RADIUS_KM = 5.0;
+    private static final double EXPANDED_MATCH_RADIUS_KM = 10.0;
+    private static final double RATING_PRIORITY_DISTANCE_KM = 0.5;
+    private static final int TOP_DRIVER_NOTIFICATION_LIMIT = 3;
 
     private final RideRepository rideRepository;
     private final DriverRepository driverRepository;
@@ -43,18 +47,10 @@ public class RideServiceImpl implements RiderService {
                     .orElseThrow(() -> new ResourceNotFoundException("No users exist in the system"));
         }
 
-        List<Driver> availableDrivers = driverRepository.findByIsAvailableTrue();
-
-        if (availableDrivers.isEmpty()) {
+        List<Driver> rankedDrivers = findBestDrivers(request.getPickupLatitude(), request.getPickupLongitude());
+        if (rankedDrivers.isEmpty()) {
             throw new RuntimeException("No Drivers Available nearby!");
         }
-
-        if (availableDrivers.isEmpty()) {
-            throw new RuntimeException("No Drivers Available nearby!");
-        }
-
-        // Driver matchedDriver = availableDrivers.get(0); // REMOVED: Driver will be
-        // assigned when they accept
 
         Location pickupLocation = Location.builder()
                 .latitude(request.getPickupLatitude())
@@ -76,8 +72,6 @@ public class RideServiceImpl implements RiderService {
 
         Ride ride = new Ride();
         ride.setRider(passenger);
-        ride.setRider(passenger);
-        // ride.setDriver(matchedDriver); // REMOVED: Driver assigned on accept
         ride.setPickupLocation(pickupLocation);
         ride.setDropLocation(dropLocation);
         ride.setStatus(RideStatus.REQUESTED);
@@ -86,12 +80,44 @@ public class RideServiceImpl implements RiderService {
         ride.setFare(calculateFare(distance, request.getVehicleType()));
 
         Ride savedRide = rideRepository.save(ride);
-
-        // matchedDriver.setIsAvailable(false); // REMOVED: Availability changes on
-        // accept/start
-        // driverRepository.save(matchedDriver);
+        notifyTopDrivers(savedRide, rankedDrivers);
 
         return mapToDto(savedRide);
+    }
+
+    @Override
+    public List<Driver> findBestDrivers(Double pickupLat, Double pickupLon) {
+        if (pickupLat == null || pickupLon == null) {
+            throw new RuntimeException("Pickup coordinates are required for driver matching");
+        }
+
+        List<Driver> nearbyDrivers = driverRepository.findAvailableDriversWithinRadius(
+                pickupLat, pickupLon, PRIMARY_MATCH_RADIUS_KM);
+
+        if (nearbyDrivers.isEmpty()) {
+            nearbyDrivers = driverRepository.findAvailableDriversWithinRadius(
+                    pickupLat, pickupLon, EXPANDED_MATCH_RADIUS_KM);
+        }
+
+        // Final fallback: show/match with all online drivers (citywide), ranked by
+        // distance + rating.
+        if (nearbyDrivers.isEmpty()) {
+            nearbyDrivers = driverRepository.findByIsAvailableTrue();
+        }
+
+        return nearbyDrivers.stream()
+                .filter(driver -> driver.getCurrentLatitude() != null && driver.getCurrentLongitude() != null)
+                .map(driver -> new DriverCandidate(
+                        driver,
+                        distanceCalculator.calculateDistance(
+                                pickupLat,
+                                pickupLon,
+                                driver.getCurrentLatitude(),
+                                driver.getCurrentLongitude()),
+                        driver.getRating() == null ? 0.0 : driver.getRating()))
+                .sorted(this::compareDriverCandidates)
+                .map(DriverCandidate::driver)
+                .toList();
     }
 
     @Override
@@ -242,6 +268,32 @@ public class RideServiceImpl implements RiderService {
                 .toList();
     }
 
+    private int compareDriverCandidates(DriverCandidate left, DriverCandidate right) {
+        double distanceGap = Math.abs(left.distanceKm() - right.distanceKm());
+        if (distanceGap < RATING_PRIORITY_DISTANCE_KM) {
+            int ratingCompare = Double.compare(right.rating(), left.rating());
+            if (ratingCompare != 0) {
+                return ratingCompare;
+            }
+        }
+
+        int distanceCompare = Double.compare(left.distanceKm(), right.distanceKm());
+        if (distanceCompare != 0) {
+            return distanceCompare;
+        }
+
+        return Double.compare(right.rating(), left.rating());
+    }
+
+    private void notifyTopDrivers(Ride ride, List<Driver> rankedDrivers) {
+        RideDto payload = mapToDto(ride);
+        rankedDrivers.stream()
+                .limit(TOP_DRIVER_NOTIFICATION_LIMIT)
+                .forEach(driver -> messagingTemplate.convertAndSend(
+                        "/topic/driver/" + driver.getId() + "/ride-request",
+                        payload));
+    }
+
     private Double calculateFare(double distance, String vehicleType) {
         double baseFare = 30.0;
         double ratePerKm;
@@ -287,5 +339,8 @@ public class RideServiceImpl implements RiderService {
             dto.setDriverRating(ride.getDriver().getRating());
         }
         return dto;
+    }
+
+    private record DriverCandidate(Driver driver, double distanceKm, double rating) {
     }
 }
