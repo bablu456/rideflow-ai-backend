@@ -9,4 +9,6 @@ public class PaymentInitiateRequest {
 
     @NotNull(message = "Payment method is required")
     private PaymentMethod paymentMethod;
+
+    private String upiId;
 }

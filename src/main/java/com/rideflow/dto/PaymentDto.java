@@ -15,6 +15,7 @@ public class PaymentDto {
     private Long rideId;
     private Double amount;
     private PaymentMethod paymentMethod;
+    private String upiId;
     private PaymentStatus paymentStatus;
     private String transactionId;
     private LocalDateTime createdAt;

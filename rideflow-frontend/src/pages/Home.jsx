@@ -11,6 +11,7 @@ import { clearSession, getPrimaryRole } from '../utils/auth';
 import { webSocketService } from '../services/WebSocketService';
 
 const API_BASE = 'http://localhost:8080';
+const UPI_ID_REGEX = /^[A-Za-z0-9._-]{2,}@[A-Za-z0-9.-]{2,}$/;
 
 const DefaultIcon = L.icon({
   iconUrl: icon,
@@ -66,6 +67,12 @@ const Home = () => {
   const [payment, setPayment] = useState(null);
   const [isPaying, setIsPaying] = useState(false);
   const [paymentError, setPaymentError] = useState('');
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('');
+  const [upiIdInput, setUpiIdInput] = useState('');
+  const [cardNumberInput, setCardNumberInput] = useState('');
+  const [cardExpiryInput, setCardExpiryInput] = useState('');
+  const [cardCvvInput, setCardCvvInput] = useState('');
+  const [cardPinInput, setCardPinInput] = useState('');
   const [nearbyDrivers, setNearbyDrivers] = useState([]);
   const [nearbyDriversLoading, setNearbyDriversLoading] = useState(false);
   const [nearbyDriversError, setNearbyDriversError] = useState('');
@@ -83,6 +90,12 @@ const Home = () => {
     setPayment(null);
     setIsPaying(false);
     setPaymentError('');
+    setSelectedPaymentMethod('');
+    setUpiIdInput('');
+    setCardNumberInput('');
+    setCardExpiryInput('');
+    setCardCvvInput('');
+    setCardPinInput('');
     setNearbyDrivers([]);
     setNearbyDriversLoading(false);
     setNearbyDriversError('');
@@ -289,7 +302,7 @@ const Home = () => {
     }
   };
 
-  const handlePayNow = async (paymentMethod) => {
+  const handlePayNow = async (paymentMethod, enteredUpiId = '') => {
     if (!currentRideId) return;
 
     setPaymentError('');
@@ -297,11 +310,29 @@ const Home = () => {
 
     try {
       let paymentData = payment;
+      let normalizedUpiId = '';
 
       if (!paymentData) {
+        if (paymentMethod === 'UPI') {
+          normalizedUpiId = enteredUpiId.trim().toLowerCase();
+          if (!normalizedUpiId) {
+            setPaymentError('Please enter your UPI ID to continue.');
+            return;
+          }
+          if (!UPI_ID_REGEX.test(normalizedUpiId)) {
+            setPaymentError('Invalid UPI ID format. Example: yourname@bank');
+            return;
+          }
+        }
+
+        const initiatePayload = { paymentMethod };
+        if (paymentMethod === 'UPI') {
+          initiatePayload.upiId = normalizedUpiId;
+        }
+
         const initiateResponse = await axios.post(
           `${API_BASE}/api/payments/rides/${currentRideId}/initiate`,
-          { paymentMethod },
+          initiatePayload,
           { headers: authHeaders }
         );
         paymentData = initiateResponse.data;
@@ -326,6 +357,75 @@ const Home = () => {
     } finally {
       setIsPaying(false);
     }
+  };
+
+  const handleSelectPaymentMethod = (method) => {
+    setSelectedPaymentMethod(method);
+    setPaymentError('');
+  };
+
+  const validateCardInputs = () => {
+    const normalizedCardNumber = cardNumberInput.replace(/\s+/g, '');
+    if (!/^\d{16}$/.test(normalizedCardNumber)) {
+      setPaymentError('Please enter a valid 16-digit card number.');
+      return false;
+    }
+
+    const expiry = cardExpiryInput.trim();
+    if (!/^\d{2}\/\d{2}$/.test(expiry)) {
+      setPaymentError('Enter expiry in MM/YY format.');
+      return false;
+    }
+
+    const [monthRaw, yearRaw] = expiry.split('/');
+    const month = Number(monthRaw);
+    if (month < 1 || month > 12) {
+      setPaymentError('Card expiry month must be between 01 and 12.');
+      return false;
+    }
+
+    const fullYear = 2000 + Number(yearRaw);
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1;
+    if (fullYear < currentYear || (fullYear === currentYear && month < currentMonth)) {
+      setPaymentError('Card is expired. Please use another card.');
+      return false;
+    }
+
+    if (!/^\d{3}$/.test(cardCvvInput.trim())) {
+      setPaymentError('Please enter a valid 3-digit CVV.');
+      return false;
+    }
+
+    if (!/^\d{4}$/.test(cardPinInput.trim())) {
+      setPaymentError('Please enter your 4-digit card PIN.');
+      return false;
+    }
+
+    return true;
+  };
+
+  const handleConfirmPayment = () => {
+    if (!selectedPaymentMethod) {
+      setPaymentError('Please select a payment method.');
+      return;
+    }
+
+    if (selectedPaymentMethod === 'UPI') {
+      handlePayNow('UPI', upiIdInput);
+      return;
+    }
+
+    if (selectedPaymentMethod === 'CARD') {
+      if (!validateCardInputs()) {
+        return;
+      }
+      handlePayNow('CARD');
+      return;
+    }
+
+    handlePayNow(selectedPaymentMethod);
   };
 
   useEffect(() => {
@@ -951,6 +1051,9 @@ const Home = () => {
                   <p className="font-semibold">Payment completed</p>
                   <p className="text-xs mt-1">Transaction: {payment.transactionId}</p>
                   <p className="text-xs mt-1">Method: {payment.paymentMethod}</p>
+                  {payment.paymentMethod === 'UPI' && payment.upiId && (
+                    <p className="text-xs mt-1">UPI ID: {payment.upiId}</p>
+                  )}
                 </div>
               ) : (
                 <>
@@ -960,29 +1063,128 @@ const Home = () => {
                     </div>
                   )}
                   <p className="text-sm text-gray-600">Select payment method</p>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     <button
-                      onClick={() => handlePayNow('CARD')}
+                      onClick={() => handleSelectPaymentMethod('CARD')}
                       disabled={isPaying}
-                      className="border border-gray-300 rounded-lg py-2 text-sm font-semibold hover:bg-gray-50 disabled:bg-gray-100 disabled:text-gray-400"
+                      className={`border rounded-lg py-2 text-sm font-semibold disabled:bg-gray-100 disabled:text-gray-400 ${
+                        selectedPaymentMethod === 'CARD'
+                          ? 'border-black bg-black text-white hover:bg-gray-900'
+                          : 'border-gray-300 hover:bg-gray-50'
+                      }`}
                     >
                       Card
                     </button>
                     <button
-                      onClick={() => handlePayNow('WALLET')}
+                      onClick={() => handleSelectPaymentMethod('WALLET')}
                       disabled={isPaying}
-                      className="border border-gray-300 rounded-lg py-2 text-sm font-semibold hover:bg-gray-50 disabled:bg-gray-100 disabled:text-gray-400"
+                      className={`border rounded-lg py-2 text-sm font-semibold disabled:bg-gray-100 disabled:text-gray-400 ${
+                        selectedPaymentMethod === 'WALLET'
+                          ? 'border-black bg-black text-white hover:bg-gray-900'
+                          : 'border-gray-300 hover:bg-gray-50'
+                      }`}
                     >
                       Wallet
                     </button>
                     <button
-                      onClick={() => handlePayNow('CASH')}
+                      onClick={() => handleSelectPaymentMethod('CASH')}
                       disabled={isPaying}
-                      className="border border-gray-300 rounded-lg py-2 text-sm font-semibold hover:bg-gray-50 disabled:bg-gray-100 disabled:text-gray-400"
+                      className={`border rounded-lg py-2 text-sm font-semibold disabled:bg-gray-100 disabled:text-gray-400 ${
+                        selectedPaymentMethod === 'CASH'
+                          ? 'border-black bg-black text-white hover:bg-gray-900'
+                          : 'border-gray-300 hover:bg-gray-50'
+                      }`}
                     >
                       Cash
                     </button>
+                    <button
+                      onClick={() => handleSelectPaymentMethod('UPI')}
+                      disabled={isPaying}
+                      className={`border rounded-lg py-2 text-sm font-semibold disabled:bg-gray-100 disabled:text-gray-400 ${
+                        selectedPaymentMethod === 'UPI'
+                          ? 'border-black bg-black text-white hover:bg-gray-900'
+                          : 'border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      UPI
+                    </button>
                   </div>
+                  {selectedPaymentMethod === 'UPI' && (
+                    <div className="space-y-2 rounded-xl border border-gray-200 bg-gray-50 p-3">
+                      <label className="text-xs text-gray-500 block text-left" htmlFor="upi-id-input">
+                        UPI ID
+                      </label>
+                      <input
+                        id="upi-id-input"
+                        type="text"
+                        value={upiIdInput}
+                        onChange={(event) => setUpiIdInput(event.target.value)}
+                        placeholder="yourname@bank"
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black/20"
+                        disabled={isPaying}
+                      />
+                    </div>
+                  )}
+                  {selectedPaymentMethod === 'CARD' && (
+                    <div className="space-y-2 rounded-xl border border-gray-200 bg-gray-50 p-3 text-left">
+                      <p className="text-xs text-gray-500">Enter card details</p>
+                      <input
+                        type="text"
+                        value={cardNumberInput}
+                        onChange={(event) => setCardNumberInput(event.target.value)}
+                        placeholder="Card Number (16 digits)"
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black/20"
+                        disabled={isPaying}
+                      />
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          type="text"
+                          value={cardExpiryInput}
+                          onChange={(event) => setCardExpiryInput(event.target.value)}
+                          placeholder="MM/YY"
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black/20"
+                          disabled={isPaying}
+                        />
+                        <input
+                          type="password"
+                          value={cardCvvInput}
+                          onChange={(event) => setCardCvvInput(event.target.value)}
+                          placeholder="CVV"
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black/20"
+                          disabled={isPaying}
+                        />
+                      </div>
+                      <input
+                        type="password"
+                        value={cardPinInput}
+                        onChange={(event) => setCardPinInput(event.target.value)}
+                        placeholder="Card PIN"
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black/20"
+                        disabled={isPaying}
+                      />
+                    </div>
+                  )}
+                  {selectedPaymentMethod === 'WALLET' && (
+                    <div className="rounded-xl border border-sky-200 bg-sky-50 p-3 text-xs text-sky-900 text-left">
+                      Wallet payment selected. Your wallet will be charged on confirmation.
+                    </div>
+                  )}
+                  {selectedPaymentMethod === 'CASH' && (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 text-left">
+                      Cash payment selected. You can pay the driver directly.
+                    </div>
+                  )}
+                  <button
+                    onClick={handleConfirmPayment}
+                    disabled={isPaying || !selectedPaymentMethod}
+                    className="w-full rounded-lg bg-black text-white py-2.5 text-sm font-semibold hover:bg-gray-800 disabled:bg-gray-300 disabled:text-gray-600"
+                  >
+                    {isPaying
+                      ? 'Processing payment...'
+                      : selectedPaymentMethod
+                        ? `Pay with ${selectedPaymentMethod}`
+                        : 'Select method first'}
+                  </button>
                   <p className="text-xs text-gray-500">{isPaying ? 'Processing payment...' : 'Pay now to close trip billing.'}</p>
                 </>
               )}

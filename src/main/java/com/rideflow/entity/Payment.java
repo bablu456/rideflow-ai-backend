@@ -31,6 +31,9 @@ public class Payment {
     @Enumerated(EnumType.STRING)
     private PaymentMethod paymentMethod;
 
+    @Column(name = "upi_id")
+    private String upiId;
+
     @Enumerated(EnumType.STRING)
     @Builder.Default
     private PaymentStatus paymentStatus = PaymentStatus.PENDING;
