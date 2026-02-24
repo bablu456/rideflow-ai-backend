@@ -6,6 +6,7 @@ import DriverDashboard from './pages/DriverDashboard';
 import OtpLogin from './pages/OtpLogin';
 import ForgotPassword from './pages/ForgotPassword';
 import AiAssistant from './pages/AiAssistant';
+import UserProfile from './pages/UserProfile';
 import ProtectedRoute from './components/ProtectedRoute';
 
 function App() {
@@ -36,6 +37,14 @@ function App() {
         element={
           <ProtectedRoute>
             <AiAssistant />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/profile"
+        element={
+          <ProtectedRoute>
+            <UserProfile />
           </ProtectedRoute>
         }
       />

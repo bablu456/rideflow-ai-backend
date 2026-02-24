@@ -37,6 +37,9 @@ public class User implements UserDetails {
 
     private String profilePicture;
 
+    @Builder.Default
+    private Double walletBalance = 0.0;
+
     /**
      * Roles like "RIDER", "DRIVER". Stored in a separate join table.
      */

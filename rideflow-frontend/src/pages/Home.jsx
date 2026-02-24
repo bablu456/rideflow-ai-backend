@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
-import { MapPin, LogOut, Bike, Clock, Car, Package, CheckCircle2, Phone, Star } from 'lucide-react';
+import { MapPin, LogOut, Bike, Clock, Car, Package, CheckCircle2, Phone, Star, UserCircle2 } from 'lucide-react';
 import axios from 'axios';
 import L from 'leaflet';
 import { useNavigate } from 'react-router-dom';
@@ -535,6 +535,13 @@ const Home = () => {
           className="bg-white px-4 py-2 rounded-full shadow-lg hover:bg-gray-100 text-gray-900 font-semibold transition"
         >
           AI
+        </button>
+        <button
+          onClick={() => navigate('/profile')}
+          className="bg-white p-3 rounded-full shadow-lg hover:bg-gray-100 text-gray-900 transition"
+          title="Profile"
+        >
+          <UserCircle2 size={20} />
         </button>
         <button
           onClick={handleLogout}
